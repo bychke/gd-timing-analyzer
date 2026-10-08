@@ -1,0 +1,357 @@
+// Geometry Dash Timing Analyzer - osu!-style timing editor for the Geometry Dash level editor.
+#include "Session.hpp"
+#include "audio/Metronome.hpp"
+#include "ui/TimingEditor.hpp"
+
+#include <Geode/Geode.hpp>
+#include <Geode/binding/ButtonSprite.hpp>
+#include <Geode/binding/FMODAudioEngine.hpp>
+#include <Geode/binding/DrawGridLayer.hpp>
+#include <Geode/binding/GameObject.hpp>
+#include <Geode/binding/LevelSettingsObject.hpp>
+#include <Geode/binding/LevelEditorLayer.hpp>
+#include <Geode/binding/SongInfoObject.hpp>
+#include <Geode/modify/CCMouseDispatcher.hpp>
+#include <Geode/modify/CustomSongLayer.hpp>
+#include <Geode/modify/EditorUI.hpp>
+#include <Geode/modify/MusicDownloadManager.hpp>
+
+using namespace geode::prelude;
+
+// "Timing" button in the Custom Song Selection window
+class $modify(TimingCustomSongLayer, CustomSongLayer) {
+    bool init(CustomSongDelegate* delegate) {
+        if (!CustomSongLayer::init(delegate)) return false;
+
+        auto spr = ButtonSprite::create("Timing", "bigFont.fnt", "GJ_button_02.png", .7f);
+        spr->setScale(.55f);
+        auto btn = CCMenuItemExt::createSpriteExtra(spr, [](auto) { TimingEditor::open(); });
+        btn->setID("timing-editor-button"_spr);
+
+        auto menu = CCMenu::create();
+        menu->setID("timing-editor-menu"_spr);
+        auto win = CCDirector::get()->getWinSize();
+        menu->setPosition(win / 2 + CCPoint{ 197, 72 });
+        menu->addChild(btn);
+        m_mainLayer->addChild(menu, 10);
+        handleTouchPriority(this);
+        Session::get().fixOldSongId();
+        return true;
+    }
+};
+
+// Mouse wheel inside the timing editor
+class $modify(CCMouseDispatcher) {
+    bool dispatchScrollMSG(float y, float x) {
+        if (TimingEditor::s_current) return TimingEditor::s_current->onScroll(-y, x);
+        return CCMouseDispatcher::dispatchScrollMSG(y, x);
+    }
+};
+
+// ---------------- local songs: a song ID can point to any file on this PC ----------------
+class $modify(MusicDownloadManager) {
+    static void onModify(auto& self) {
+        // run before other song mods (NONG managers) so our local files win
+        for (auto name : { "MusicDownloadManager::pathForSong", "MusicDownloadManager::isSongDownloaded",
+                           "MusicDownloadManager::getSongInfoObject" })
+            (void)self.setHookPriority(name, -10000);
+    }
+
+    gd::string pathForSong(int id) {
+        if (auto p = Session::get().songOverride(id)) return utils::string::pathToString(*p);
+        return MusicDownloadManager::pathForSong(id);
+    }
+
+    bool isSongDownloaded(int id) {
+        if (Session::get().songOverride(id)) return true;
+        return MusicDownloadManager::isSongDownloaded(id);
+    }
+
+    SongInfoObject* getSongInfoObject(int id) {
+        auto p = Session::get().songOverride(id);
+        if (!p) return MusicDownloadManager::getSongInfoObject(id);
+        // show the local file's name in the song widget
+        static std::map<int, Ref<SongInfoObject>> cache;
+        // objects handed to the game are never freed (song widgets may still point at an older one)
+        static std::vector<Ref<SongInfoObject>> keepAlive;
+        auto& obj = cache[id];
+        auto name = utils::string::pathToString(p->stem());
+        if (!obj || obj->m_songName != name) {
+            if (obj) keepAlive.push_back(obj);
+            // fully initialized object (the short create leaves fields the song widget reads)
+            obj = SongInfoObject::create(id, name, "Local file", 0, 0.f, "", "", "", "", 0, "", false, 0, 0);
+        }
+        return obj;
+    }
+};
+
+// ---------------- level editor: metronome button + grid position ----------------
+class $modify(TimingEditorUI, EditorUI) {
+    struct Fields {
+        metronome::Tracker tracker;
+        CCLabelBMFont* gridLabel = nullptr;
+        CCMenuItemToggler* toggle = nullptr;
+        CCMenuItemToggler* waveToggle = nullptr;
+        // background waveform
+        CCDrawNode* waveNode = nullptr;
+        AudioData const* waveAudio = nullptr;
+        float waveNorm = 1.f;
+        std::array<float, 6> waveKey{};
+        int waveFrames = 0;
+    };
+
+    bool init(LevelEditorLayer* lel) {
+        if (!EditorUI::init(lel)) return false;
+
+        // use the saved timing of this level's song
+        auto& s = Session::get();
+        // a different level starts clean: its own song, its own timing and settings
+        s.enterLevel();
+
+        if (m_playbackBtn && m_playbackBtn->getParent()) {
+            float target = m_playbackBtn->getScaledContentSize().height * 0.8f;
+            auto makeSpr = [target](char const* text, bool on, CircleBaseColor color) {
+                auto lbl = CCLabelBMFont::create(fmt::format("{}\n{}", text, on ? "ON" : "OFF").c_str(), "bigFont.fnt");
+                lbl->setAlignment(kCCTextAlignmentCenter);
+                lbl->setScale(.45f);
+                auto spr = CircleButtonSprite::create(lbl, on ? color : CircleBaseColor::Gray, CircleBaseSize::Small);
+                spr->setScale(target / spr->getContentSize().height);
+                return spr;
+            };
+            auto onSpr = makeSpr("BPM", true, CircleBaseColor::Green);
+            auto offSpr = makeSpr("BPM", false, CircleBaseColor::Green);
+
+            auto toggle = CCMenuItemExt::createToggler(onSpr, offSpr, [](CCMenuItemToggler* t) {
+                // the callback runs before the toggler flips
+                Session::get().setEditorMetronome(!t->isToggled());
+            });
+            toggle->toggle(s.editorMetronome());
+            toggle->setID("metronome-toggle"_spr);
+            m_fields->toggle = toggle;
+
+            auto world = m_playbackBtn->getParent()->convertToWorldSpace(m_playbackBtn->getPosition());
+            auto local = this->convertToNodeSpace(world);
+            float gap = m_playbackBtn->getScaledContentSize().width * 0.5f + target * 0.6f + 6;
+
+            float step = target + 4;
+            // WAVE ON/OFF: semi-transparent waveform of the song behind the level
+            auto waveToggle = CCMenuItemExt::createToggler(makeSpr("WAVE", true, CircleBaseColor::Cyan),
+                makeSpr("WAVE", false, CircleBaseColor::Cyan), [](CCMenuItemToggler* t) {
+                    Session::get().setEditorWaveform(!t->isToggled());
+                });
+            waveToggle->toggle(s.editorWaveform());
+            waveToggle->setID("waveform-toggle"_spr);
+            waveToggle->setPosition({ step, 0 });
+            m_fields->waveToggle = waveToggle;
+
+            // TIME: opens the timing editor at the current moment of the level (and comes back on close)
+            auto timeLbl = CCLabelBMFont::create("TIME", "bigFont.fnt");
+            timeLbl->setScale(.4f);
+            auto timeSpr = CircleButtonSprite::create(timeLbl, CircleBaseColor::Blue, CircleBaseSize::Small);
+            timeSpr->setScale(target / timeSpr->getContentSize().height);
+            auto wave = CCMenuItemExt::createSpriteExtra(timeSpr, [](auto) { TimingEditor::openFromEditor(); });
+            wave->setID("timing-editor-button"_spr);
+            wave->setPosition({ step * 2, 0 });
+
+            auto menu = CCMenu::create();
+            menu->setID("metronome-menu"_spr);
+            menu->setPosition(local + CCPoint{ gap, 0 });
+            menu->addChild(toggle);
+            menu->addChild(waveToggle);
+            menu->addChild(wave);
+            this->addChild(menu, 10);
+
+            auto label = CCLabelBMFont::create("", "chatFont.fnt");
+            label->setID("grid-position"_spr);
+            label->setScale(.5f);
+            label->setAnchorPoint({ 0, .5f });
+            label->setPosition(local + CCPoint{ gap + step * 2 + target * 0.6f + 6, 0 });
+            this->addChild(label, 10);
+            m_fields->gridLabel = label;
+        }
+
+        this->schedule(schedule_selector(TimingEditorUI::onTimingTick));
+        return true;
+    }
+
+    // Draws the song's waveform behind the objects, aligned with the level (speed portals + song offset)
+    void updateBackgroundWaveform() {
+        auto& s = Session::get();
+        auto lel = m_editorLayer;
+        auto grid = lel ? lel->m_drawGridLayer : nullptr;
+        auto parent = grid ? grid->getParent() : nullptr;
+        if (!parent || !lel->m_levelSettings) return;
+
+        auto& f = m_fields;
+        if (!s.editorWaveform()) {
+            if (f->waveNode) f->waveNode->setVisible(false);
+            return;
+        }
+        // decode the level's song if needed
+        auto song = Session::currentLevelSongPath();
+        // only decode when nothing is loaded yet - never replace the song the Timing window works on
+        if (!s.unloaded && !s.busy && !TimingEditor::s_current && !song.empty() &&
+            (s.audioPath.empty() || (s.audioPath == song && !s.audio)))
+            s.loadAudio(song);
+        auto audio = s.audio.get();
+        if (!audio || audio->peakMax.empty() || s.audioPath != song) {
+            if (f->waveNode) f->waveNode->setVisible(false);
+            return;
+        }
+
+        if (!f->waveNode) {
+            f->waveNode = CCDrawNode::create();
+            f->waveNode->setID("background-waveform"_spr);
+            // right above the grid, under the objects
+            parent->addChild(f->waveNode, grid->getZOrder());
+        }
+        auto node = f->waveNode;
+        node->setVisible(true);
+
+        if (f->waveAudio != audio) {
+            f->waveAudio = audio;
+            float amp = 0.f;
+            for (size_t i = 0; i < audio->peakMax.size(); i += 16)
+                amp = std::max({ amp, audio->peakMax[i], -audio->peakMin[i] });
+            f->waveNorm = amp > 0 ? amp : 1.f;
+            f->waveKey = {};
+        }
+
+        auto win = CCDirector::get()->getWinSize();
+        auto bl = parent->convertToNodeSpace({ 0, 0 });
+        auto tr = parent->convertToNodeSpace({ win.width, win.height });
+        float offset = lel->m_levelSettings->m_songOffset;
+        std::array<float, 6> key{ bl.x, bl.y, tr.x, tr.y, offset, (float)lel->m_objects->count() };
+        // redraw only when the view changes (and now and then for edited speed portals)
+        if (key == f->waveKey && ++f->waveFrames < 60) return;
+        f->waveKey = key;
+        f->waveFrames = 0;
+        node->clear();
+
+        float cy = (bl.y + tr.y) / 2;
+        float t0 = std::max(0.f, lel->timeForPos({ bl.x, cy }, 0, 0, false, 0));
+        float t1 = lel->timeForPos({ tr.x, cy }, 0, 0, false, 0);
+        if (t1 <= t0) return;
+        float h = (tr.y - bl.y) * 0.3f;
+        constexpr int N = 360;
+        ccColor4F fill{ 0.35f, 0.8f, 1.f, 0.22f };
+        float prevX = 0;
+        for (int i = 0; i <= N; i++) {
+            float t = t0 + (t1 - t0) * i / N;
+            float x = lel->posForTime(t).x;
+            if (i > 0 && x > prevX) {
+                double a = (t0 + (t1 - t0) * (i - 1) / N + offset) * 1000.0;
+                double b = (t + offset) * 1000.0;
+                if (b > 0 && a < audio->lengthMs) {
+                    auto [mn, mx] = audio->range(std::max(0.0, a), b);
+                    float amp = std::min(1.f, std::max(std::abs(mn), std::abs(mx)) / f->waveNorm) * h;
+                    if (amp > 0.5f) {
+                        CCPoint quad[4] = { { prevX, cy - amp }, { x, cy - amp }, { x, cy + amp }, { prevX, cy + amp } };
+                        node->drawPolygon(quad, 4, fill, 0, fill);
+                    }
+                }
+            }
+            prevX = x;
+        }
+    }
+
+    void onTimingTick(float) {
+        updateBackgroundWaveform();
+        auto& s = Session::get();
+        auto engine = FMODAudioEngine::get();
+        bool playing = engine->isMusicPlaying(0);
+
+        if (playing) {
+            double pos = engine->getMusicTimeMS(0);
+            if (s.editorMetronome()) m_fields->tracker.update(pos, s.map);
+            else m_fields->tracker.reset();
+        } else {
+            m_fields->tracker.reset();
+        }
+
+        auto label = m_fields->gridLabel;
+        if (!label) return;
+        label->setVisible(Mod::get()->getSettingValue<bool>("show-object-beat"));
+        if (m_fields->toggle && m_fields->toggle->isToggled() != s.editorMetronome())
+            m_fields->toggle->toggle(s.editorMetronome());
+        if (m_fields->waveToggle && m_fields->waveToggle->isToggled() != s.editorWaveform())
+            m_fields->waveToggle->toggle(s.editorWaveform());
+
+        if (s.map.empty()) {
+            label->setString("No timing - open Custom Song > Timing");
+            label->setColor({ 180, 180, 180 });
+            return;
+        }
+        if (playing) {
+            auto g = s.map.locate(engine->getMusicTimeMS(0), 2.0);
+            label->setString(fmt::format("Music: Bar {}  Beat {}", g.bar, g.beat).c_str());
+            label->setColor({ 255, 255, 255 });
+            return;
+        }
+        GameObject* obj = m_selectedObject;
+        if (!obj && m_selectedObjects && m_selectedObjects->count() > 0)
+            obj = static_cast<GameObject*>(m_selectedObjects->objectAtIndex(0));
+        if (!obj) {
+            label->setString("Select an object to see its beat");
+            label->setColor({ 180, 180, 180 });
+            return;
+        }
+        auto t = Session::songTimeAtLevelPos(obj->getPosition());
+        if (!t) return;
+        // one editor unit is ~3 ms at normal speed, so allow a bit of tolerance
+        auto g = s.map.locate(*t, 4.0);
+        label->setString(("Object: " + g.describe()).c_str());
+        label->setColor(g.den == 0 ? ccColor3B{ 255, 120, 120 } : ccColor3B{ 140, 255, 140 });
+    }
+};
+
+// ---------------- drag & drop of files (Windows) ----------------
+#ifdef GEODE_IS_WINDOWS
+#include <shellapi.h>
+
+static WNDPROC g_origProc = nullptr;
+
+static void onFileDropped(std::filesystem::path path) {
+    if (TimingEditor::s_current) {
+        TimingEditor::s_current->handleDroppedFile(path);
+        return;
+    }
+    if (!LevelEditorLayer::get()) return; // editor only
+    TimingEditor::open();
+    if (TimingEditor::s_current) TimingEditor::s_current->handleDroppedFile(path);
+}
+
+static LRESULT CALLBACK dropWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_DROPFILES) {
+        auto drop = (HDROP)wp;
+        UINT n = DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
+        std::vector<std::filesystem::path> files;
+        for (UINT i = 0; i < n; i++) {
+            UINT len = DragQueryFileW(drop, i, nullptr, 0);
+            std::wstring w(len, L'\0');
+            DragQueryFileW(drop, i, w.data(), len + 1);
+            files.emplace_back(w);
+        }
+        DragFinish(drop);
+        // audio first, then .osu (so loading the audio does not overwrite the imported timing)
+        std::stable_sort(files.begin(), files.end(), [](auto const& a, auto const& b) {
+            return (a.extension() == ".osu") < (b.extension() == ".osu");
+        });
+        queueInMainThread([files] { for (auto const& f : files) onFileDropped(f); });
+        return 0;
+    }
+    return CallWindowProcW(g_origProc, hwnd, msg, wp, lp);
+}
+
+$on_mod(Loaded) {
+    queueInMainThread([] {
+        HWND hwnd = WindowFromDC(wglGetCurrentDC());
+        if (!hwnd) {
+            log::warn("GD window not found - drag & drop disabled");
+            return;
+        }
+        DragAcceptFiles(hwnd, TRUE);
+        g_origProc = (WNDPROC)SetWindowLongPtrW(hwnd, GWLP_WNDPROC, (LONG_PTR)dropWndProc);
+    });
+}
+#endif

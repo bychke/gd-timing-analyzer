@@ -1,0 +1,6 @@
+build/
+build-test/
+*.osu
+.vs/
+.idea/
+build-local.bat

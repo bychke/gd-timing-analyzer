@@ -1,0 +1,60 @@
+{
+	"geode": "5.10.1",
+	"gd": {
+		"win": "2.2081"
+	},
+	"id": "bychke.gd-timing-analyzer",
+	"name": "Geometry Dash Timing Analyzer",
+	"version": "v1.0.0",
+	"developer": "bychke",
+	"tags": [
+		"editor",
+		"music",
+		"utility",
+		"enhancement",
+		"interface"
+	],
+	"description": "osu!-style timing analyzer for the level editor: song waveform, BPM and tempo-change detection, editable timing points, .osu import / export, metronome, guidelines and local songs.",
+	"settings": {
+		"metronome-volume": {
+			"type": "int",
+			"name": "Metronome volume",
+			"description": "Volume of the metronome clicks (0-100).",
+			"default": 70,
+			"min": 0,
+			"max": 100,
+			"control": {
+				"slider": true,
+				"arrows": true
+			}
+		},
+		"metronome-offset": {
+			"type": "int",
+			"name": "Metronome offset (ms)",
+			"description": "Plays the clicks earlier (positive) or later (negative) to compensate for audio latency.",
+			"default": 0,
+			"min": -200,
+			"max": 200,
+			"control": {
+				"slider": true,
+				"arrows": true,
+				"arrow-step": 5
+			}
+		},
+		"show-object-beat": {
+			"type": "bool",
+			"name": "Show beat of selected object",
+			"description": "In the editor, shows next to the BPM / WAVE / TIME buttons on which bar / beat the selected object (or the playing music) is.",
+			"default": true
+		},
+		"auto-use-song": {
+			"type": "bool",
+			"name": "Use loaded song in the level",
+			"description": "When you load an audio file in the Timing window opened from a level, the level plays that file right away (local song ID).",
+			"default": true
+		}
+	},
+	"links": {
+		"source": "https://github.com/bychke/gd-timing-analyzer"
+	}
+}
