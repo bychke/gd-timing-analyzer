@@ -57,6 +57,9 @@ public:
     bool clearGuidelines();
     // After a timing change: redraws the guidelines when "Automatic guidelines" is on (editor only)
     void autoGuidelines();
+    // Custom-colored guidelines (drawn by the mod, see updateCustomGuidelines): shown after Create guidelines
+    bool customGuidesOn = false;
+    int guidesRev = 0; // bumped whenever they change, so the editor redraws
     // Guideline divisor of the whole level: 1 = beats, 2 = 1/2, 3 = 1/3... (per level)
     int guideDivisor();
     void setGuideDivisor(int divisor);
@@ -97,6 +100,11 @@ public:
 
     // Song used by the open level (empty if none / not downloaded)
     static std::filesystem::path currentLevelSongPath();
+    // Where the open level's song comes from: "Jukebox NONG", "Newgrounds / Music Library", "Local file" ("" = none)
+    static std::string currentLevelSongSource();
+    // One line for the top of the timing window: what is loaded (song + its source) and whether an .osu is used
+    std::string songDescription();
+    std::string osuTimingName(); // name of the imported .osu file ("" = timing is not from an .osu)
     // Song time (ms) of a position in the level, accounting for speed portals and song offset
     static std::optional<double> songTimeAtLevelPos(cocos2d::CCPoint pos);
 

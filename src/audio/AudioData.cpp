@@ -73,7 +73,7 @@ Result<AudioData> decodeAudio(std::filesystem::path const& path) {
     data.mono.reserve(lenPcm);
 
     int bytesPerSample = bits / 8;
-    std::vector<unsigned char> buf(1 << 16);
+    std::vector<unsigned char> buf(1 << 20);
     size_t frameBytes = (size_t)bytesPerSample * channels;
     std::vector<unsigned char> carry;
     while (true) {
@@ -82,6 +82,18 @@ Result<AudioData> decodeAudio(std::filesystem::path const& path) {
         if (read == 0) break;
         carry.insert(carry.end(), buf.begin(), buf.begin() + read);
         size_t frames = carry.size() / frameBytes;
+        if (format == FMOD_SOUND_FORMAT_PCM16) {
+            // most songs: no per-sample format switch
+            for (size_t f = 0; f < frames; f++) {
+                int sum = 0;
+                for (int c = 0; c < channels; c++) {
+                    int16_t v;
+                    std::memcpy(&v, carry.data() + f * frameBytes + c * 2, 2);
+                    sum += v;
+                }
+                data.mono.push_back(sum / (32768.f * channels));
+            }
+        } else
         for (size_t f = 0; f < frames; f++) {
             float sum = 0;
             for (int c = 0; c < channels; c++) {

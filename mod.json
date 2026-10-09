@@ -5,7 +5,7 @@
 	},
 	"id": "bychke.gd-timing-analyzer",
 	"name": "Geometry Dash Timing Analyzer",
-	"version": "v1.1.0",
+	"version": "v1.2.0",
 	"developer": "bychke",
 	"tags": [
 		"editor",
@@ -16,45 +16,6 @@
 	],
 	"description": "osu!-style timing analyzer for the level editor: song waveform, BPM and tempo-change detection, editable timing points, .osu import / export, metronome, guidelines and local songs.",
 	"settings": {
-		"metronome-volume": {
-			"type": "int",
-			"name": "Metronome volume",
-			"description": "Volume of the metronome clicks (0-100).",
-			"default": 70,
-			"min": 0,
-			"max": 100,
-			"control": {
-				"slider": true,
-				"arrows": true
-			}
-		},
-		"metronome-sound": {
-			"type": "string",
-			"name": "Metronome sound",
-			"description": "Sound of the metronome clicks.",
-			"default": "classic",
-			"one-of": ["classic", "wood", "click"]
-		},
-		"metronome-ticks": {
-			"type": "string",
-			"name": "Metronome ticks",
-			"description": "1/1 = a click on every beat. 1/2, 1/3, 1/4 = also quieter clicks between the beats.",
-			"default": "1/1",
-			"one-of": ["1/1", "1/2", "1/3", "1/4"]
-		},
-		"metronome-accent": {
-			"type": "int",
-			"name": "First beat of a bar volume (%)",
-			"description": "How loud the first beat of every bar is compared to the other beats.",
-			"default": 160,
-			"min": 100,
-			"max": 300,
-			"control": {
-				"slider": true,
-				"arrows": true,
-				"arrow-step": 10
-			}
-		},
 		"metronome-offset": {
 			"type": "int",
 			"name": "Metronome offset (ms)",
@@ -68,69 +29,17 @@
 				"arrow-step": 5
 			}
 		},
-		"show-object-beat": {
-			"type": "bool",
-			"name": "Show beat of selected object",
-			"description": "In the editor, shows at the top of the screen on which bar / beat the selected object (or the playing music) is.",
-			"default": true
-		},
 		"auto-guidelines": {
 			"type": "bool",
 			"name": "Automatic guidelines",
 			"description": "The editor guidelines update by themselves after every timing change (adding, moving or deleting a timing point, analysis, .osu import). Replaces guidelines added by hand.",
 			"default": true
 		},
-		"hide-buttons-playtest": {
+		"custom-guideline-colors": {
 			"type": "bool",
-			"name": "Hide buttons while playtesting",
-			"description": "The BPM / WAVE / TIME / 1/N buttons disappear while you playtest the level in the editor.",
+			"name": "Custom guideline colors",
+			"description": "Draws the guidelines itself in the same bright colors as the timing waveform (white bar/beat, red 1/2, blue 1/4, purple 1/3) instead of GD's built-in green/yellow/orange. These lines are not saved in the level.",
 			"default": true
-		},
-		"buttons-layout": {
-			"type": "string",
-			"name": "Editor buttons layout",
-			"description": "How the BPM / WAVE / TIME / 1/N buttons are arranged in the editor.",
-			"default": "row",
-			"one-of": ["row", "2x2", "column"]
-		},
-		"buttons-x": {
-			"type": "int",
-			"name": "Editor buttons X",
-			"description": "Moves the editor buttons left (negative) or right (positive).",
-			"default": 0,
-			"min": -500,
-			"max": 500,
-			"control": {
-				"slider": true,
-				"arrows": true,
-				"arrow-step": 5
-			}
-		},
-		"buttons-y": {
-			"type": "int",
-			"name": "Editor buttons Y",
-			"description": "Moves the editor buttons down (negative) or up (positive).",
-			"default": 0,
-			"min": -300,
-			"max": 300,
-			"control": {
-				"slider": true,
-				"arrows": true,
-				"arrow-step": 5
-			}
-		},
-		"buttons-scale": {
-			"type": "float",
-			"name": "Editor buttons size",
-			"description": "Size of the editor buttons.",
-			"default": 1.0,
-			"min": 0.5,
-			"max": 1.5,
-			"control": {
-				"slider": true,
-				"arrows": true,
-				"arrow-step": 0.05
-			}
 		},
 		"auto-use-song": {
 			"type": "bool",

@@ -145,6 +145,7 @@ void Session::unloadEverything() {
     audio.reset();
     envelope.reset();
     map = {};
+    setSetting("osu-file", "");
     firstBeatMs = -1;
     m_mapLevelKey = m_levelKey;
     unloaded = true;
@@ -284,21 +285,28 @@ void Session::loadAudio(std::filesystem::path const& path) {
     unsigned gen = ++m_generation;
     std::thread([this, path, gen] {
         auto res = decodeAudio(path);
-        std::shared_ptr<AudioData> data;
-        std::shared_ptr<OnsetEnvelope> env;
-        std::string err;
-        if (res) {
-            data = std::make_shared<AudioData>(std::move(res).unwrap());
-            env = std::make_shared<OnsetEnvelope>(computeOnsetEnvelope(data->mono, data->sampleRate, &progress));
-        } else {
-            err = res.unwrapErr();
+        if (!res) {
+            queueInMainThread([this, gen, err = res.unwrapErr()] {
+                if (gen != m_generation) return;
+                busy = false;
+                Notification::create(err, NotificationIcon::Error)->show();
+                sessionChanged();
+            });
+            return;
         }
-        queueInMainThread([this, gen, data, env, err] {
+        auto data = std::make_shared<AudioData>(std::move(res).unwrap());
+        // the waveform shows up right away; the onset envelope (only needed for analysis) follows
+        queueInMainThread([this, gen, data] {
+            if (gen != m_generation) return;
+            audio = data;
+            busyText = "Preparing analysis";
+            sessionChanged();
+        });
+        auto env = std::make_shared<OnsetEnvelope>(computeOnsetEnvelope(data->mono, data->sampleRate, &progress));
+        queueInMainThread([this, gen, env] {
             if (gen != m_generation) return;
             busy = false;
-            audio = data;
             envelope = env;
-            if (!err.empty()) Notification::create(err, NotificationIcon::Error)->show();
             sessionChanged();
         });
     }).detach();
@@ -323,6 +331,7 @@ void Session::analyze(AnalyzerSettings settings) {
                 auto rhythm = std::move(map.rhythm);
                 map = res->map;
                 map.rhythm = std::move(rhythm);
+                setSetting("osu-file", "");
                 firstBeatMs = res->firstBeatMs;
                 save();
                 Notification::create(fmt::format("Detected {} timing point(s)", map.points.size()),
@@ -343,6 +352,7 @@ bool Session::importOsu(std::filesystem::path const& path, std::string* error) {
     // the rhythm patterns stay
     m.rhythm = map.rhythm;
     map = m;
+    setSetting("osu-file", utils::string::pathToString(path.filename()));
     // if the beatmap's audio file sits next to the .osu and nothing is loaded yet - load it too
     if (!audio && !busy && !audioName.empty()) {
         auto a = path.parent_path() / audioName;
@@ -396,6 +406,11 @@ int Session::applyGuidelines() {
         out += fmt::format("{:.4f}~{}~", sec, color);
         count++;
     }
+    // custom colors: the mod draws the lines itself, so GD's own (fixed-color) ones are left empty
+    bool custom = Mod::get()->getSettingValue<bool>("custom-guideline-colors");
+    if (custom) out.clear();
+    customGuidesOn = custom && count > 0;
+    guidesRev++;
     lel->m_levelSettings->m_guidelineString = out;
     lel->m_levelSettings->m_guidelinesUpdated = true;
     if (lel->m_drawGridLayer) lel->m_drawGridLayer->loadTimeMarkers(out);
@@ -405,6 +420,8 @@ int Session::applyGuidelines() {
 bool Session::clearGuidelines() {
     auto lel = LevelEditorLayer::get();
     if (!lel || !lel->m_levelSettings) return false;
+    customGuidesOn = false;
+    guidesRev++;
     lel->m_levelSettings->m_guidelineString = "";
     lel->m_levelSettings->m_guidelinesUpdated = true;
     if (lel->m_drawGridLayer) lel->m_drawGridLayer->loadTimeMarkers("");
@@ -516,19 +533,52 @@ static std::filesystem::path jukeboxSongPath(int id) {
     return {};
 }
 
-std::filesystem::path Session::currentLevelSongPath() {
-    int id = 0;
+static int currentLevelSongId() {
     if (auto layer = Session::get().openSongLayer(); layer && layer->m_songDelegate)
-        id = layer->m_songDelegate->getActiveSongID();
-    else if (auto lel = LevelEditorLayer::get(); lel && lel->m_level)
-        id = lel->m_level->m_songID;
-    if (id <= 0) return {};
+        return layer->m_songDelegate->getActiveSongID();
+    if (auto lel = LevelEditorLayer::get(); lel && lel->m_level) return lel->m_level->m_songID;
+    return 0;
+}
 
-    if (auto p = Session::get().songOverride(id)) return *p;
-    if (auto p = jukeboxSongPath(id); !p.empty()) return p;
+// path = the song's file, source = where it comes from
+static void levelSong(std::filesystem::path& path, std::string& source) {
+    path.clear();
+    source.clear();
+    int id = currentLevelSongId();
+    if (id <= 0) return;
+    if (auto p = Session::get().songOverride(id)) { path = *p; source = "Local file"; return; }
+    if (auto p = jukeboxSongPath(id); !p.empty()) { path = p; source = "Jukebox NONG"; return; }
     std::filesystem::path p = utils::string::utf8ToWide(std::string(MusicDownloadManager::sharedState()->pathForSong(id)));
     std::error_code ec;
-    return std::filesystem::exists(p, ec) ? p : std::filesystem::path{};
+    if (std::filesystem::exists(p, ec)) { path = p; source = "Newgrounds / Music Library"; }
+}
+
+std::filesystem::path Session::currentLevelSongPath() {
+    std::filesystem::path p;
+    std::string src;
+    levelSong(p, src);
+    return p;
+}
+
+std::string Session::currentLevelSongSource() {
+    std::filesystem::path p;
+    std::string src;
+    levelSong(p, src);
+    return src;
+}
+
+std::string Session::songDescription() {
+    if (audioPath.empty()) return "No song loaded";
+    auto name = utils::string::pathToString(audioPath.filename());
+    std::filesystem::path lvl;
+    std::string src;
+    levelSong(lvl, src);
+    if (!src.empty() && lvl == audioPath) return fmt::format("{} ({})", name, src);
+    return fmt::format("{} (local file, not the level's song)", name);
+}
+
+std::string Session::osuTimingName() {
+    return setting("osu-file", "").asString().unwrapOr("");
 }
 
 // ---------------- local songs ----------------

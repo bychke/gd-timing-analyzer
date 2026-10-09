@@ -1,4 +1,5 @@
 #include "Metronome.hpp"
+#include "../Options.hpp"
 
 #include <Geode/Geode.hpp>
 #include <Geode/binding/FMODAudioEngine.hpp>
@@ -75,14 +76,14 @@ FMOD::Sound* makeSound(FMOD::System* sys, std::vector<float> const& samples) {
 }
 
 int metronome::ticksPerBeat() {
-    auto t = Mod::get()->getSettingValue<std::string>("metronome-ticks");
+    auto t = opt::get<std::string>("metronome-ticks");
     return t == "1/2" ? 2 : t == "1/3" ? 3 : t == "1/4" ? 4 : 1;
 }
 
 void metronome::click(TickKind kind) {
     auto sys = FMODAudioEngine::get()->m_system;
     if (!sys) return;
-    auto type = Mod::get()->getSettingValue<std::string>("metronome-sound");
+    auto type = opt::get<std::string>("metronome-sound");
     auto& pair = g_sounds[type];
     if (!pair.hi) {
         pair.hi = makeSound(sys, synth(type, true));
@@ -90,8 +91,8 @@ void metronome::click(TickKind kind) {
     }
     auto snd = kind == TickKind::Downbeat ? pair.hi : pair.lo;
     if (!snd) return;
-    float vol = float(Mod::get()->getSettingValue<int64_t>("metronome-volume")) / 100.f;
-    if (kind == TickKind::Downbeat) vol *= float(Mod::get()->getSettingValue<int64_t>("metronome-accent")) / 100.f;
+    float vol = float(opt::get<int64_t>("metronome-volume")) / 100.f;
+    if (kind == TickKind::Downbeat) vol *= float(opt::get<int64_t>("metronome-accent")) / 100.f;
     else if (kind == TickKind::Sub) vol *= .45f;
     FMOD::Channel* ch = nullptr;
     sys->playSound(snd, nullptr, true, &ch);

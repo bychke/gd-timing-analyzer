@@ -1,10 +1,12 @@
 // Geometry Dash Timing Analyzer - osu!-style timing editor for the Geometry Dash level editor.
 #include "Session.hpp"
+#include "Options.hpp"
 #include "audio/Metronome.hpp"
 #include "ui/LayoutPopup.hpp"
 #include "ui/TimingEditor.hpp"
 
 #include <Geode/Geode.hpp>
+#include <Geode/ui/GeodeUI.hpp>
 #include <Geode/binding/ButtonSprite.hpp>
 #include <Geode/binding/FMODAudioEngine.hpp>
 #include <Geode/binding/DrawGridLayer.hpp>
@@ -92,6 +94,8 @@ class $modify(TimingEditorUI, EditorUI) {
     struct Fields {
         metronome::Tracker tracker;
         CCLabelBMFont* gridLabel = nullptr;
+        CCLabelBMFont* centerLabel = nullptr;
+        CCPoint labelBase;
         CCMenuItemToggler* toggle = nullptr;
         CCMenuItemToggler* waveToggle = nullptr;
         CCLabelBMFont* divLabel = nullptr;
@@ -106,6 +110,10 @@ class $modify(TimingEditorUI, EditorUI) {
         float waveNorm = 1.f;
         std::array<float, 6> waveKey{};
         int waveFrames = 0;
+        CCDrawNode* guideNode = nullptr;
+        std::array<float, 7> guideKey{};
+        int guideFrames = 0;
+        bool guideInit = false;
     };
 
     bool init(LevelEditorLayer* lel) {
@@ -196,9 +204,18 @@ class $modify(TimingEditorUI, EditorUI) {
             label->setID("grid-position"_spr);
             label->setScale(.5f);
             label->setAnchorPoint({ .5f, .5f });
-            label->setPosition({ win.width / 2, win.height - 56 });
+            label->setPosition({ win.width / 2, win.height - 68 });
             this->addChild(label, 10);
             m_fields->gridLabel = label;
+
+            // second line: where the middle of the screen is (the line that activates triggers while scrolling)
+            auto center = CCLabelBMFont::create("", "chatFont.fnt");
+            center->setID("center-position"_spr);
+            center->setScale(.5f);
+            center->setPosition({ win.width / 2, win.height - 56 });
+            this->addChild(center, 10);
+            m_fields->centerLabel = center;
+            m_fields->labelBase = CCPoint{ win.width / 2, win.height - 56 };
         }
 
         this->schedule(schedule_selector(TimingEditorUI::onTimingTick));
@@ -210,19 +227,26 @@ class $modify(TimingEditorUI, EditorUI) {
         auto& f = m_fields;
         if (!f->menu) return;
         auto mod = Mod::get();
-        f->menu->setPosition(f->menuBase + CCPoint{ (float)mod->getSettingValue<int64_t>("buttons-x"),
-                                                    (float)mod->getSettingValue<int64_t>("buttons-y") });
-        f->menu->setScale((float)mod->getSettingValue<double>("buttons-scale"));
+        f->menu->setPosition(f->menuBase + CCPoint{ (float)opt::get<int64_t>("buttons-x"),
+                                                    (float)opt::get<int64_t>("buttons-y") });
+        f->menu->setScale((float)opt::get<double>("buttons-scale"));
         bool playtest = m_editorLayer && m_editorLayer->m_playbackMode != PlaybackMode::Not;
-        f->menu->setVisible(!(playtest && mod->getSettingValue<bool>("hide-buttons-playtest")));
-        auto layout = mod->getSettingValue<std::string>("buttons-layout");
+        f->menu->setVisible(!(playtest && opt::get<bool>("hide-buttons-playtest")));
+        auto layout = opt::get<std::string>("buttons-layout");
         float s = f->step;
+        // hidden buttons (Editor Settings) leave no gap: the shown ones move together
+        static char const* const showKeys[] = { "show-btn-bpm", "show-btn-wave", "show-btn-time", "show-btn-div" };
+        int n = 0;
         for (int i = 0; i < 4; i++) {
             if (!f->buttons[i]) continue;
-            CCPoint pos = layout == "column" ? CCPoint{ 0, -s * i }
-                        : layout == "2x2"    ? CCPoint{ s * (i % 2), -s * (i / 2) }
-                                             : CCPoint{ s * i, 0 };
+            bool show = opt::get<bool>(showKeys[i]);
+            f->buttons[i]->setVisible(show);
+            if (!show) continue;
+            CCPoint pos = layout == "column" ? CCPoint{ 0, -s * n }
+                        : layout == "2x2"    ? CCPoint{ s * (n % 2), -s * (n / 2) }
+                                             : CCPoint{ s * n, 0 };
             f->buttons[i]->setPosition(pos);
+            n++;
         }
     }
 
@@ -286,7 +310,8 @@ class $modify(TimingEditorUI, EditorUI) {
         if (t1 <= t0) return;
         float h = (tr.y - bl.y) * 0.3f;
         constexpr int N = 360;
-        ccColor4F fill{ 0.35f, 0.8f, 1.f, 0.22f };
+        auto wc = opt::get<ccColor4B>("editor-waveform-color");
+        ccColor4F fill{ wc.r / 255.f, wc.g / 255.f, wc.b / 255.f, wc.a / 255.f };
         float prevX = 0;
         for (int i = 0; i <= N; i++) {
             float t = t0 + (t1 - t0) * i / N;
@@ -307,9 +332,101 @@ class $modify(TimingEditorUI, EditorUI) {
         }
     }
 
+    // Guidelines in the waveform's colors (GD's own guidelines only have a few fixed colors)
+    void updateCustomGuidelines() {
+        auto& s = Session::get();
+        auto lel = m_editorLayer;
+        auto grid = lel ? lel->m_drawGridLayer : nullptr;
+        auto parent = grid ? grid->getParent() : nullptr;
+        if (!parent || !lel->m_levelSettings) return;
+        auto& f = m_fields;
+        // custom lines aren't saved in the level: with "Automatic guidelines" draw them once when the editor opens
+        if (!f->guideInit && !s.busy && s.timingIsForCurrentLevel()) {
+            f->guideInit = true;
+            s.autoGuidelines();
+        }
+        if (!s.customGuidesOn || s.map.empty()) {
+            if (f->guideNode) f->guideNode->setVisible(false);
+            return;
+        }
+        if (!f->guideNode) {
+            f->guideNode = CCDrawNode::create();
+            f->guideNode->setID("custom-guidelines"_spr);
+            parent->addChild(f->guideNode, grid->getZOrder());
+        }
+        auto node = f->guideNode;
+        node->setVisible(true);
+
+        auto win = CCDirector::get()->getWinSize();
+        auto bl = parent->convertToNodeSpace({ 0, 0 });
+        auto tr = parent->convertToNodeSpace({ win.width, win.height });
+        std::array<float, 7> key{ bl.x, bl.y, tr.x, tr.y, lel->m_levelSettings->m_songOffset,
+                                  (float)s.guidesRev, (float)s.guideDivisor() };
+        if (key == f->guideKey && ++f->guideFrames < 60) return;
+        f->guideKey = key;
+        f->guideFrames = 0;
+        node->clear();
+
+        float cy = (bl.y + tr.y) / 2;
+        float offset = lel->m_levelSettings->m_songOffset;
+        double t0 = (std::max(0.f, lel->timeForPos({ bl.x, cy }, 0, 0, false, 0)) + offset) * 1000.0;
+        double t1 = (lel->timeForPos({ tr.x, cy }, 0, 0, false, 0) + offset) * 1000.0;
+        if (t1 <= t0) return;
+        auto mod = Mod::get();
+        float radius = (float)opt::get<double>("guideline-thickness") / std::max(0.05f, parent->getScale());
+        auto col = [&](char const* id) {
+            auto v = opt::get<ccColor4B>(id);
+            return ccColor4F{ v.r / 255.f, v.g / 255.f, v.b / 255.f, v.a / 255.f };
+        };
+        // osu! beat snap colors: the smallest snap (1/1 ... 1/16) the position lands on
+        constexpr int SNAPS[] = { 1, 2, 3, 4, 6, 8, 12, 16 };
+        ccColor4F colors[8];
+        for (int i = 0; i < 8; i++) colors[i] = col(fmt::format("guide-color-{}", SNAPS[i]).c_str());
+        s.map.forEachClick(t0, t1, s.guideDivisor(), [&](double t, TickKind k) {
+            ccColor4F c = colors[7];
+            int idx = s.map.indexAt(t);
+            if (k != TickKind::Sub || idx < 0) c = colors[0];
+            else {
+                auto const& p = s.map.points[idx];
+                double pos = std::fmod((t - p.time) / p.beatLength + 1000.0, 1.0);
+                for (int i = 0; i < 8; i++) {
+                    double v = pos * SNAPS[i];
+                    if (std::abs(v - std::round(v)) < 2e-3 * SNAPS[i]) { c = colors[i]; break; }
+                }
+            }
+            float x = lel->posForTime((float)(t / 1000.0 - offset)).x;
+            node->drawSegment({ x, bl.y }, { x, tr.y }, radius, c);
+        });
+    }
+
+    void updateCenterLabel(bool playing) {
+        auto label = m_fields->centerLabel;
+        if (!label) return;
+        // both texts follow the offset from the settings (draggable in the Text tab, re-read every frame)
+        auto mod = Mod::get();
+        CCPoint off{ (float)opt::get<int64_t>("text-x"), (float)opt::get<int64_t>("text-y") };
+        label->setPosition(m_fields->labelBase + off);
+        if (m_fields->gridLabel) m_fields->gridLabel->setPosition(m_fields->labelBase + off - CCPoint{ 0, 12 });
+        auto& s = Session::get();
+        auto lel = m_editorLayer;
+        bool show = opt::get<bool>("show-object-beat") && !playing && !s.map.empty() &&
+                    lel && lel->m_objectLayer;
+        label->setVisible(show);
+        if (!show) return;
+        auto win = CCDirector::get()->getWinSize();
+        auto t = Session::songTimeAtLevelPos(lel->m_objectLayer->convertToNodeSpace({ win.width / 2, win.height / 2 }));
+        if (!t) return;
+        auto g = s.map.locate(*t, 4.0);
+        auto text = "Screen center: " + g.describe();
+        if (text != label->getString()) label->setString(text.c_str());
+        if (!opt::get<bool>("center-text-colors")) label->setColor({ 255, 255, 255 });
+        else label->setColor(g.den == 0 ? ccColor3B{ 200, 200, 255 } : ccColor3B{ 120, 220, 255 });
+    }
+
     void onTimingTick(float) {
         applyButtonLayout();
         updateBackgroundWaveform();
+        updateCustomGuidelines();
         auto& s = Session::get();
         auto engine = FMODAudioEngine::get();
         bool playing = engine->isMusicPlaying(0);
@@ -324,7 +441,8 @@ class $modify(TimingEditorUI, EditorUI) {
 
         auto label = m_fields->gridLabel;
         if (!label) return;
-        label->setVisible(Mod::get()->getSettingValue<bool>("show-object-beat"));
+        label->setVisible(opt::get<bool>("show-object-beat"));
+        updateCenterLabel(playing);
         if (m_fields->toggle && m_fields->toggle->isToggled() != s.editorMetronome())
             m_fields->toggle->toggle(s.editorMetronome());
         if (m_fields->waveToggle && m_fields->waveToggle->isToggled() != s.editorWaveform())
@@ -363,17 +481,17 @@ class $modify(TimingEditorUI, EditorUI) {
     }
 };
 
-// ---------------- editor pause menu: button that edits the layout of the editor buttons ----------------
+// ---------------- editor pause menu: button that opens the editor settings preview ----------------
 class $modify(TimingEditorPauseLayer, EditorPauseLayer) {
     bool init(LevelEditorLayer* lel) {
         if (!EditorPauseLayer::init(lel)) return false;
 
         auto spr = CircleButtonSprite::createWithSprite("note_wave.png"_spr, 1.f, CircleBaseColor::Green,
             CircleBaseSize::Medium);
-        auto btn = CCMenuItemExt::createSpriteExtra(spr, [this](auto) {
-            // back to the editor so the buttons are visible while they are being moved
-            this->onResume(nullptr);
-            LayoutPopup::open();
+        // all Timing Analyzer settings in a window over the pause menu
+        auto btn = CCMenuItemExt::createSpriteExtra(spr, [](auto) {
+            // every setting of the mod in one window (the live editor preview is in TIME > Editor Settings)
+            openSettingsPopup(Mod::get(), false);
         });
         btn->setID("editor-buttons-layout"_spr);
 

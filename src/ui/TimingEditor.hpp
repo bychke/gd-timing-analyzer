@@ -1,8 +1,11 @@
-#pragma once
+﻿#pragma once
+#include <map>
 #include "../audio/Metronome.hpp"
 #include "../timing/TimingMap.hpp"
 
 #include <Geode/Geode.hpp>
+#include <Geode/ui/BasedButtonSprite.hpp>
+#include <Geode/binding/ButtonSprite.hpp>
 #include <fmod.hpp>
 
 #include <filesystem>
@@ -40,11 +43,16 @@ private:
         cocos2d::CCMenu* menu = nullptr;
         cocos2d::CCLabelBMFont* label = nullptr; // label of the tab button
         cocos2d::CCNode* button = nullptr;
+        cocos2d::CCNode* bg = nullptr;           // background of the tab button (tinted when selected)
+        char const* name = "";
+        char const* iconName = nullptr;
         std::vector<geode::TextInput*> inputs;
+        std::string help; // shown by the "i" button
     };
     std::vector<Tab> m_tabs;
     int m_tab = 0;
     void layoutTabs();
+    void makeTabButton(int idx, float width);
 
     // rhythm patterns (Rhythm tab)
     int m_rhythmTab = -1;
@@ -53,6 +61,7 @@ private:
     cocos2d::CCMenu* m_rhythmGrid = nullptr;
     cocos2d::CCLabelBMFont* m_rhythmLabel = nullptr;
     cocos2d::CCLabelBMFont* m_rhythmLenLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_rhythmEmptyLabel = nullptr;
     cocos2d::CCLabelBMFont* m_rhythmLoopsLabel = nullptr;
     cocos2d::CCLabelBMFont* m_rhythmPageLabel = nullptr;
     std::string m_rhythmGridKey;
@@ -92,7 +101,7 @@ private:
     double m_clock = 0;
 
     // dragging
-    enum class Drag { None, Pending, Scroll, Marker, Rhythm, Overview };
+    enum class Drag { None, Pending, Scroll, Marker, Rhythm, Overview, Layout };
     Drag m_drag = Drag::None;
     float m_dragStartX = 0;
     double m_dragStartView = 0;
@@ -105,15 +114,34 @@ private:
     cocos2d::CCLabelBMFont* m_pointLabel = nullptr;
     cocos2d::CCLabelBMFont* m_statusLabel = nullptr;
     cocos2d::CCLabelBMFont* m_divLabel = nullptr;
-    cocos2d::CCLabelBMFont* m_playLabel = nullptr;
-    cocos2d::CCLabelBMFont* m_metroLabel = nullptr;
-    cocos2d::CCLabelBMFont* m_allLabel = nullptr;
-    cocos2d::CCLabelBMFont* m_changesLabel = nullptr;
+    cocos2d::CCSprite* m_playIcon = nullptr;
+    geode::TextInput* m_offsetInput = nullptr;
+    void updatePlayIcon();
+
+    // "Move UI": drag the controls of a tab around; offsets are saved ("ui-layout")
+    CCMenuItemSpriteExtra* m_helpBtn = nullptr;
+    cocos2d::CCLabelBMFont* m_osuLabel = nullptr;
+    bool m_layoutEdit = false;
+    cocos2d::CCNode* m_editSel = nullptr;
+    cocos2d::CCPoint m_editGrab, m_editStart;
+    std::map<cocos2d::CCNode*, cocos2d::CCPoint> m_uiBase;
+    std::map<cocos2d::CCNode*, std::string> m_uiIds;
+    cocos2d::CCDrawNode* m_editDraw = nullptr;
+    cocos2d::CCLabelBMFont* m_editHint = nullptr;
+    cocos2d::CCLabelBMFont* m_editBtnLabel = nullptr;
+    void applyUiLayout();
+    void saveUiLayout();
+    void toggleLayoutEdit();
+    void drawLayoutEdit();
+    bool inCurrentTab(cocos2d::CCNode* n) const;
+    cocos2d::CCNode* pickUiNode(cocos2d::CCPoint p) const;
+    CCMenuItemToggler* m_metroCheck = nullptr;
+    CCMenuItemToggler* m_allCheck = nullptr;
+    CCMenuItemToggler* m_changesCheck = nullptr;
     cocos2d::CCLabelBMFont* m_halfLabel = nullptr;
     cocos2d::CCLabelBMFont* m_offsetLabel = nullptr;
     cocos2d::CCLabelBMFont* m_soundLabel = nullptr;
     cocos2d::CCLabelBMFont* m_ticksLabel = nullptr;
-    cocos2d::CCLabelBMFont* m_accentLabel = nullptr;
     Slider* m_musicSlider = nullptr;
     Slider* m_metroSlider = nullptr;
     cocos2d::CCLabelBMFont* m_musicVolLabel = nullptr;
@@ -128,15 +156,43 @@ private:
 
     // helpers
     cocos2d::CCMenu* m_menu = nullptr; // tab bar
-    Tab& addTab(char const* name, float x);
+    cocos2d::CCNode* m_settingsBtn = nullptr; // "UI Settings" at the right end of the tab bar
+    Tab& addTab(char const* name, float x, char const* iconName = nullptr);
+    static cocos2d::CCSprite* icon(char const* name);
+    static cocos2d::CCNode* pill(char const* text, char const* iconName, char const* bg, float width, float height,
+                                 float textScale = .32f, bool iconRight = false, cocos2d::CCLabelBMFont** labelOut = nullptr);
+    CCMenuItemSpriteExtra* addPill(cocos2d::CCMenu* menu, char const* text, char const* iconName, char const* bg,
+                                   cocos2d::CCPoint pos, float width, float height, geode::Function<void()> cb,
+                                   bool iconRight = false, cocos2d::CCLabelBMFont** labelOut = nullptr, float textScale = .32f);
+    cocos2d::CCNode* roundIcon(char const* name, float fill = .7f);
+    CCMenuItemSpriteExtra* addRound(Tab& tab, cocos2d::CCNode* top, geode::CircleBaseColor color, cocos2d::CCPoint pos,
+                                    char const* caption, geode::Function<void()> cb, float size = 24.f);
+    cocos2d::CCLabelBMFont* addRoundText(Tab& tab, char const* text, geode::CircleBaseColor color, cocos2d::CCPoint pos,
+                                         char const* caption, geode::Function<void()> cb, float size = 24.f);
+    static void fitRoundText(cocos2d::CCLabelBMFont* lbl);
+    static void setRoundText(cocos2d::CCLabelBMFont* lbl, std::string const& text);
+    CCMenuItemSpriteExtra* addFrameButton(Tab& tab, char const* frame, cocos2d::CCPoint pos, char const* caption,
+                                          geode::Function<void()> cb, float size = 24.f);
+    void addCaption(Tab& tab, char const* text, cocos2d::CCPoint pos);
     void switchTab(int idx);
     CCMenuItemSpriteExtra* addButton(cocos2d::CCMenu* menu, char const* text, cocos2d::CCPoint pos,
                                      geode::Function<void()> cb, char const* bg = "GJ_button_04.png",
-                                     cocos2d::CCLabelBMFont** labelOut = nullptr);
+                                     cocos2d::CCLabelBMFont** labelOut = nullptr, float scale = .5f);
     geode::TextInput* addInput(Tab& tab, char const* caption, float x, float y, float width,
                                char const* placeholder, geode::CommonFilter filter);
-    void addDescription(Tab& tab, char const* text, float topY, float x = 16);
-    void setToggle(cocos2d::CCLabelBMFont* label, char const* name, bool on);
+    ButtonSprite* addSelector(Tab& tab, char const* text, cocos2d::CCPoint pos, char const* widest,
+                              geode::Function<void()> cb);
+    void addSeparator(Tab& tab, float x, bool lowOnly = false, float around = 0,
+                      cocos2d::ccColor4B color = { 0, 0, 0, 70 });
+    cocos2d::CCLabelBMFont* addArrowText(Tab& tab, char const* text, cocos2d::CCPoint pos, char const* caption,
+                                         geode::Function<void(int)> cb, float half = 30.f);
+    void addArrow(Tab& tab, cocos2d::CCPoint pos, int dir, geode::Function<void()> cb);
+    static void addArrowTo(cocos2d::CCMenu* menu, cocos2d::CCPoint pos, int dir, geode::Function<void()> cb);
+    void addHeader(Tab& tab, char const* text, cocos2d::CCPoint pos);
+    void addHelp(Tab& tab, char const* text);
+    CCMenuItemToggler* addCheckbox(cocos2d::CCMenu* menu, char const* text, cocos2d::CCPoint pos,
+                                   geode::Function<void(bool)> cb, bool left = false, float* widthOut = nullptr);
+    void setCheck(CCMenuItemToggler* toggle, bool on);
 
     void redraw();
     void refreshPanel();

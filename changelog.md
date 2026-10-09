@@ -1,3 +1,21 @@
+# v1.2.0
+
+## Timing window
+- Redesigned look: tabs with icons, compact rows of round buttons, GD-style buttons in Files
+- **Grid** moved to the Timing Points tab
+- **Editor Settings** renamed to **UI Settings**
+- The top line shows the song and where it comes from (Jukebox NONG, Music Library, local file) and whether the timing comes from an .osu file
+
+## Editor
+- **Custom guideline colors**: guidelines drawn in the waveform's colors (setting, on by default)
+- Second text line shows the position of the screen center; both texts can be moved
+- Choose which editor buttons are shown (BPM, WAVE, TIME, 1/N)
+- Waveform and guideline colors and thickness are editable in UI Settings
+
+## Other
+- Faster loading: the waveform appears right away, the analysis follows
+- Editor-only options are no longer duplicated in Geode's settings list
+
 # v1.1.0
 
 ## Editor
