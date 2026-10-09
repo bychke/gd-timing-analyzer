@@ -5,6 +5,7 @@
 #include <Geode/binding/EditLevelLayer.hpp>
 #include <Geode/binding/EditorUI.hpp>
 #include <Geode/binding/FMODAudioEngine.hpp>
+#include <Geode/binding/GameObject.hpp>
 #include <Geode/binding/GJGameLevel.hpp>
 #include <Geode/binding/LevelEditorLayer.hpp>
 #include <Geode/binding/LevelSettingsObject.hpp>
@@ -124,6 +125,7 @@ void Session::save() {
     data["audio"] = utils::string::pathToString(audioPath);
     writeLevelData();
     m_mapLevelKey = m_levelKey;
+    autoGuidelines();
 }
 
 void Session::unloadEverything() {
@@ -146,6 +148,7 @@ void Session::unloadEverything() {
     firstBeatMs = -1;
     m_mapLevelKey = m_levelKey;
     unloaded = true;
+    autoGuidelines();
     sessionChanged();
 }
 
@@ -316,7 +319,10 @@ void Session::analyze(AnalyzerSettings settings) {
             if (res->map.empty()) {
                 Notification::create("No beat detected", NotificationIcon::Error)->show();
             } else {
+                // new timing points, the rhythm patterns stay
+                auto rhythm = std::move(map.rhythm);
                 map = res->map;
+                map.rhythm = std::move(rhythm);
                 firstBeatMs = res->firstBeatMs;
                 save();
                 Notification::create(fmt::format("Detected {} timing point(s)", map.points.size()),
@@ -334,6 +340,8 @@ bool Session::importOsu(std::filesystem::path const& path, std::string* error) {
     std::string audioName;
     auto m = TimingMap::fromOsu(ss.str(), &audioName);
     if (m.empty()) { if (error) *error = "No timing points in this file"; return false; }
+    // the rhythm patterns stay
+    m.rhythm = map.rhythm;
     map = m;
     // if the beatmap's audio file sits next to the .osu and nothing is loaded yet - load it too
     if (!audio && !busy && !audioName.empty()) {
@@ -354,24 +362,40 @@ bool Session::exportOsu(std::filesystem::path const& path) {
     return true;
 }
 
-int Session::applyGuidelines(int divisor) {
+// ---------------- guideline divisor ----------------
+
+int Session::guideDivisor() {
+    int def = settingBool("guide-half", false) ? 2 : 1; // older versions only had a 1/2 toggle
+    return std::clamp((int)setting("guide-divisor", def).asInt().unwrapOr(def), 1, 16);
+}
+
+void Session::setGuideDivisor(int divisor) {
+    setSetting("guide-divisor", std::clamp(divisor, 1, 16));
+}
+
+int Session::applyGuidelines() {
     auto lel = LevelEditorLayer::get();
     if (!lel || !lel->m_levelSettings || map.empty()) return 0;
     double offsetMs = lel->m_levelSettings->m_songOffset * 1000.0;
     double endMs = audio ? audio->lengthMs : map.points.back().time + 600000.0;
 
+    // regular grid + the hits of rhythm patterns, in time order
+    std::vector<std::pair<double, TickKind>> ticks;
+    map.forEachClick(0, endMs, guideDivisor(), [&](double t, TickKind k) { ticks.emplace_back(t, k); });
+    std::sort(ticks.begin(), ticks.end(), [](auto const& a, auto const& b) { return a.first < b.first; });
+
     std::string out;
     int count = 0;
-    map.forEachTick(0, endMs, std::max(1, divisor), [&](double t, TickKind k) {
+    for (auto [t, k] : ticks) {
         // GD guidelines use song time (the editor shifts them by the song offset itself);
         // skip the beats before the level's start offset
-        if (t < offsetMs - 1) return;
+        if (t < offsetMs - 1) continue;
         double sec = t / 1000.0;
         // GD guideline colors: 0.8 orange, 0.9 yellow, 1.0 green
         float color = k == TickKind::Downbeat ? 1.0f : (k == TickKind::Beat ? 0.9f : 0.8f);
         out += fmt::format("{:.4f}~{}~", sec, color);
         count++;
-    });
+    }
     lel->m_levelSettings->m_guidelineString = out;
     lel->m_levelSettings->m_guidelinesUpdated = true;
     if (lel->m_drawGridLayer) lel->m_drawGridLayer->loadTimeMarkers(out);
@@ -387,11 +411,38 @@ bool Session::clearGuidelines() {
     return true;
 }
 
+void Session::autoGuidelines() {
+    if (!Mod::get()->getSettingValue<bool>("auto-guidelines")) return;
+    if (!LevelEditorLayer::get() || !timingIsForCurrentLevel()) return;
+    if (map.empty()) clearGuidelines();
+    else applyGuidelines();
+}
+
 std::optional<double> Session::songTimeAtLevelPos(CCPoint pos) {
     auto lel = LevelEditorLayer::get();
     if (!lel || !lel->m_levelSettings) return std::nullopt;
     float sec = lel->timeForPos(pos, 0, 0, false, 0);
     return (sec + lel->m_levelSettings->m_songOffset) * 1000.0;
+}
+
+std::optional<std::pair<CCPoint, CCPoint>> Session::selectedObjectsRange() {
+    auto lel = LevelEditorLayer::get();
+    auto ui = lel ? lel->m_editorUI : nullptr;
+    if (!ui) return std::nullopt;
+    std::optional<std::pair<CCPoint, CCPoint>> r;
+    auto add = [&](GameObject* obj) {
+        if (!obj) return;
+        auto p = obj->getPosition();
+        if (!r) r = { p, p };
+        else {
+            if (p.x < r->first.x) r->first = p;
+            if (p.x > r->second.x) r->second = p;
+        }
+    };
+    add(ui->m_selectedObject);
+    if (ui->m_selectedObjects)
+        for (auto obj : CCArrayExt<GameObject*>(ui->m_selectedObjects)) add(obj);
+    return r;
 }
 
 std::optional<double> Session::editorSongTime(bool* playing) {
@@ -403,6 +454,8 @@ std::optional<double> Session::editorSongTime(bool* playing) {
         if (playing) *playing = true;
         return (double)engine->getMusicTimeMS(0);
     }
+    // a selected object (the leftmost one) marks the exact moment
+    if (auto r = selectedObjectsRange()) return songTimeAtLevelPos(r->first);
     auto win = CCDirector::get()->getWinSize();
     return songTimeAtLevelPos(lel->m_objectLayer->convertToNodeSpace(win / 2));
 }

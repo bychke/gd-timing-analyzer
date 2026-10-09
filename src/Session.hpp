@@ -11,6 +11,8 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 // Mod state that outlives the editor window (audio, timing, onset envelope).
 class Session {
@@ -50,9 +52,14 @@ public:
     // Removes the song, waveform and every timing point of this level (also the saved files)
     void unloadEverything();
     bool unloaded = false;
-    // Writes guidelines into the open GD editor. divisor 1 = beats, 2 = also 1/2. Returns line count.
-    int applyGuidelines(int divisor);
+    // Writes guidelines into the open GD editor (level divisor + zones). Returns line count.
+    int applyGuidelines();
     bool clearGuidelines();
+    // After a timing change: redraws the guidelines when "Automatic guidelines" is on (editor only)
+    void autoGuidelines();
+    // Guideline divisor of the whole level: 1 = beats, 2 = 1/2, 3 = 1/3... (per level)
+    int guideDivisor();
+    void setGuideDivisor(int divisor);
 
     // Metronome in the level editor (persisted)
     bool editorMetronome();
@@ -94,7 +101,10 @@ public:
     static std::optional<double> songTimeAtLevelPos(cocos2d::CCPoint pos);
 
     // --- editor <-> waveform playback sync ---
-    // Song time (ms) the editor is at: the playing music, or the middle of the screen. playing = music runs.
+    // Positions (object layer) of the leftmost and rightmost selected objects in the editor
+    static std::optional<std::pair<cocos2d::CCPoint, cocos2d::CCPoint>> selectedObjectsRange();
+    // Song time (ms) the editor is at: the playing music, the leftmost selected object, or the middle of
+    // the screen. playing = music runs.
     static std::optional<double> editorSongTime(bool* playing = nullptr);
     // Moves the editor view to a song time (ms) and optionally starts editor music playback from there
     static void editorGoTo(double ms, bool play);

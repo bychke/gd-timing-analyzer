@@ -9,6 +9,107 @@
 void TimingMap::sort() {
     std::stable_sort(points.begin(), points.end(),
         [](auto const& a, auto const& b) { return a.time < b.time; });
+    std::stable_sort(rhythm.begin(), rhythm.end(),
+        [](auto const& a, auto const& b) { return a.time < b.time; });
+}
+
+// ---------------- rhythm patterns ----------------
+
+// a timing point up to this many ms after a rhythm point counts as being at the same place
+static constexpr double RHYTHM_SLACK = 5.0;
+
+int RhythmPoint::patternBeats() const {
+    int n = 0;
+    for (auto const& b : beats) n += std::max(1, b.span);
+    return std::max(1, n);
+}
+
+// Timing point a rhythm point plays in, and where its beats are counted from
+static TimingPoint const* rhythmTiming(TimingMap const& map, RhythmPoint const& rp, double& start) {
+    start = rp.time;
+    if (map.points.empty()) return nullptr;
+    auto const& tp = map.points[std::max(0, map.indexAt(rp.time + RHYTHM_SLACK))];
+    // starts together with that timing point -> count the beats exactly from it
+    if (tp.time > start && tp.time - start <= RHYTHM_SLACK) start = tp.time;
+    return tp.beatLength > 0 ? &tp : nullptr;
+}
+
+double TimingMap::rhythmEnd(int i) const {
+    if (i < 0 || i >= (int)rhythm.size()) return 0;
+    auto const& rp = rhythm[i];
+    double start = rp.time;
+    double end = 1e300;
+    if (i + 1 < (int)rhythm.size()) end = rhythm[i + 1].time;
+    // a BPM change ends the pattern (a timing point right at the start - a few ms off - belongs to it)
+    for (auto const& p : points)
+        if (p.time > start + RHYTHM_SLACK) { end = std::min(end, p.time); break; }
+    // only a set number of repetitions
+    double s;
+    if (rp.loops > 0 && !rp.beats.empty())
+        if (auto tp = rhythmTiming(*this, rp, s)) end = std::min(end, s + rp.loops * rp.patternBeats() * tp->beatLength);
+    return end;
+}
+
+int TimingMap::rhythmAt(double t) const {
+    int idx = -1;
+    for (int i = 0; i < (int)rhythm.size(); i++) {
+        if (rhythm[i].time <= t + 1e-6) idx = i;
+        else break;
+    }
+    if (idx < 0 || rhythm[idx].beats.empty() || t >= rhythmEnd(idx) - 1e-3) return -1;
+    return idx;
+}
+
+void TimingMap::forEachRhythmHit(double from, double to, std::function<void(double, TickKind)> const& cb) const {
+    if (points.empty()) return;
+    for (int i = 0; i < (int)rhythm.size(); i++) {
+        auto const& rp = rhythm[i];
+        if (rp.beats.empty()) continue;
+        double start;
+        auto tp = rhythmTiming(*this, rp, start);
+        if (!tp) continue;
+        double end = rhythmEnd(i);
+        double lo = std::max(from, start), hi = std::min(to, end);
+        if (hi < lo) continue;
+        double bl = tp->beatLength;
+        int meter = std::max(1, tp->meter);
+        int len = rp.patternBeats();
+        long long loop0 = std::max(0LL, (long long)std::floor((lo - start) / (len * bl) - 1e-9));
+        for (long long loop = loop0;; loop++) {
+            double loopStart = start + loop * len * bl;
+            if (loopStart > hi + 1e-6) break;
+            int beat = 0; // beats from the loop start
+            for (auto const& b : rp.beats) {
+                int span = std::max(1, b.span);
+                int div = std::clamp(b.divisor, 1, 16);
+                double stepStart = loopStart + beat * bl;
+                for (int j = 0; j < div; j++) {
+                    if (!(b.hits & (1u << j))) continue;
+                    double t = stepStart + j * span * bl / div;
+                    if (t < lo - 1e-6 || t > hi + 1e-6 || t >= end - 1e-3) continue;
+                    TickKind kind = TickKind::Sub;
+                    // accented hits are beats (downbeat when it is the first beat of a bar), the rest sub-beats
+                    if (b.accents & (1u << j)) {
+                        kind = TickKind::Beat;
+                        if ((j * span) % div == 0) {
+                            long long bt = std::llround((t - tp->time) / bl);
+                            if (((bt % meter) + meter) % meter == 0) kind = TickKind::Downbeat;
+                        }
+                    }
+                    cb(t, kind);
+                }
+                beat += span;
+            }
+        }
+    }
+}
+
+void TimingMap::forEachClick(double from, double to, int divisor,
+                             std::function<void(double, TickKind)> const& cb) const {
+    forEachTick(from, to, divisor, [&](double t, TickKind k) {
+        if (rhythm.empty() || rhythmAt(t) < 0) cb(t, k);
+    });
+    forEachRhythmHit(from, to, cb);
 }
 
 int TimingMap::indexAt(double t) const {
@@ -194,11 +295,56 @@ std::string TimingMap::serialize() const {
         std::snprintf(buf, sizeof buf, "%.4f,%.12g,%d;", p.time, p.beatLength, p.meter);
         out += buf;
     }
+    // rhythm patterns: |Rtime,bars,div:hits/div:hits/...;
+    if (!rhythm.empty()) {
+        out += "|R";
+        for (auto const& r : rhythm) {
+            std::snprintf(buf, sizeof buf, "%.4f,%d,L%d,", r.time, r.bars, r.loops);
+            out += buf;
+            for (auto const& b : r.beats) {
+                std::snprintf(buf, sizeof buf, "%d:%u:%d:%u/", b.divisor, b.hits, b.span, b.accents);
+                out += buf;
+            }
+            out += ";";
+        }
+    }
     return out;
 }
 
-TimingMap TimingMap::deserialize(std::string const& s) {
+TimingMap TimingMap::deserialize(std::string const& full) {
     TimingMap map;
+    auto rpos = full.find("|R");
+    std::string s = full.substr(0, rpos);
+    if (rpos != std::string::npos) {
+        std::stringstream rs(full.substr(rpos + 2));
+        std::string item;
+        while (std::getline(rs, item, ';')) {
+            RhythmPoint r;
+            int bars = 1;
+            char beatsBuf[2048] = {};
+            int loops = 0;
+            // newer: time,bars,Lloops,beats   older: time,bars,beats
+            int n = std::sscanf(item.c_str(), "%lf,%d,L%d,%2047s", &r.time, &bars, &loops, beatsBuf);
+            if (n < 3) n = std::sscanf(item.c_str(), "%lf,%d,%2047s", &r.time, &bars, beatsBuf);
+            if (n < 2) continue;
+            r.bars = std::clamp(bars, 1, 4);
+            r.loops = std::max(0, loops);
+            std::stringstream bs(beatsBuf);
+            std::string beat;
+            while (std::getline(bs, beat, '/')) {
+                RhythmBeat b;
+                int n = std::sscanf(beat.c_str(), "%d:%u:%d:%u", &b.divisor, &b.hits, &b.span, &b.accents);
+                if (n >= 2) {
+                    b.divisor = std::clamp(b.divisor, 1, 16);
+                    b.span = std::clamp(b.span, 1, 16);
+                    // saved before accents existed -> the hits on beat lines are accented
+                    if (n < 4) b.accents = defaultAccents(b.divisor, b.span);
+                    r.beats.push_back(b);
+                }
+            }
+            map.rhythm.push_back(r);
+        }
+    }
     std::stringstream ss(s);
     std::string item;
     while (std::getline(ss, item, ';')) {

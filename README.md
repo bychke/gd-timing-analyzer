@@ -16,12 +16,13 @@ timing points like in osu!, and build your level exactly on the beat.
 
 - **Waveform** with a beat grid (1/1 ... 1/16), zoom and scrolling
 - **Automatic analysis** of the BPM, tempo changes and first beat
-- **Editable timing points**: time, BPM, beats per bar, x2 / ÷2, downbeat, tap tempo
-- **osu! beatmap import / export**, see [below](#importing-osu-beatmaps)
-- **Metronome** shared by the timing window and the editor, with volume sliders
-- **Editor buttons** next to the music button: **BPM** (metronome), **WAVE** (waveform behind the level),
-  **TIME** (opens the timing window at the level's moment and continues from there when closed)
-- **Guidelines** made from your timing, **song start offset** set from the waveform cursor
+- **Editable timing points** with **undo / redo**
+- **Rhythm patterns**: a changing rhythm inside one BPM (1/4, then four fast 1/6 hits...)
+- **Metronome** shared by the timing window and the editor, with 3 sounds and an accented first beat
+- **Editor buttons**: **BPM** (metronome), **WAVE** (waveform behind the level), **TIME** (opens the timing window
+  at the selected object), **1/N** (guideline snap). Movable and resizable
+- **Guidelines** made from your timing, updated automatically; **song start offset** from the waveform cursor
+- **osu! beatmap import / export**
 - **Local songs**: a level can play any mp3 / ogg / wav / flac from your PC (works with Jukebox NONGs)
 - **Per-level data**: every level has its own song, timing and settings, exportable as one file
 
@@ -36,28 +37,15 @@ timing points like in osu!, and build your level exactly on the beat.
   </tr>
 </table>
 
-## Importing osu! beatmaps
+## Guide
 
-Already have a timed osu! map for your song? Take its timing straight into Geometry Dash.
-
-![Imported osu! timing](docs/osu-import.png)
-
-1. **Drag a `.osu` file onto the game window**, or use **Files → Import .osu**.
-2. Pick the right file: every difficulty is its own `.osu` in the beatmap folder (`osu!/Songs/<beatmap>/`),
-   named `Artist - Title (Mapper) [Difficulty].osu`.
-
-   <img src="docs/osu-file.png" alt=".osu difficulty files in a beatmap folder">
-
-- All **red (uninherited) timing points** are copied (time, BPM, beats per bar), including every BPM change
-  (the screenshot shows 474 points from one map). Green slider-velocity points are skipped.
-- If the beatmap's audio file is next to the `.osu` and no song is loaded yet, **the song is loaded too**.
-- The result is a normal timing map: edit it, use the metronome, make guidelines from it.
-- **Files → Export .osu** does the opposite: it saves your timing as an osu! `[TimingPoints]` section.
+Every part of the mod is explained in the **[Wiki](../../wiki)**: the timing window, timing points, rhythm patterns,
+editor buttons, metronome, guidelines, local songs, osu! import, settings, shortcuts and a FAQ.
 
 ## Usage
 
 Open it with **Custom Song → Timing** or the **TIME** button in the editor, or drag an audio / `.osu` file
-onto the game window. Every tab has a short description of its buttons.
+onto the game window. Start with [Getting Started](../../wiki/Getting-Started).
 
 ## Installation
 

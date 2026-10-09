@@ -16,6 +16,36 @@ struct TimingPoint {
 
 enum class TickKind { Downbeat, Beat, Sub };
 
+// One step of a rhythm pattern: `span` beats split into `divisor` parts, bit j of `hits` = a hit on part j
+// (span 2 + divisor 3 = three even hits over two beats). Bit j of `accents` = that hit is accented
+// (pink: louder metronome click, beat-colored guideline); other hits are quiet sub-beats.
+struct RhythmBeat {
+    int divisor = 1;
+    unsigned hits = 1;
+    int span = 1;
+    unsigned accents = 1;
+};
+
+// Default accents: the parts that fall on a beat line
+inline unsigned defaultAccents(int divisor, int span) {
+    unsigned a = 0;
+    for (int j = 0; j < divisor && j < 32; j++)
+        if ((j * span) % divisor == 0) a |= 1u << j;
+    return a;
+}
+
+// Rhythm pattern (1, 2 or 4 bars) that repeats from `time` until the next rhythm point or BPM change,
+// or only `loops` times (0 = no limit). Empty `beats` = "Normal" point (back to the regular grid).
+struct RhythmPoint {
+    double time = 0.0;
+    int bars = 1;
+    int loops = 0;
+    std::vector<RhythmBeat> beats;
+
+    // length of one repetition in beats
+    int patternBeats() const;
+};
+
 // Where a moment in time lies on the beat grid
 struct GridPosition {
     bool valid = false;
@@ -32,9 +62,20 @@ struct GridPosition {
 class TimingMap {
 public:
     std::vector<TimingPoint> points;
+    std::vector<RhythmPoint> rhythm;
 
     bool empty() const { return points.empty(); }
     void sort();
+
+    // --- rhythm patterns ---
+    // Where rhythm point i stops (next rhythm point or the next BPM change)
+    double rhythmEnd(int i) const;
+    // Rhythm point whose pattern plays at t (-1 = regular grid)
+    int rhythmAt(double t) const;
+    // Every hit of the rhythm patterns in [from, to]
+    void forEachRhythmHit(double from, double to, std::function<void(double, TickKind)> const& cb) const;
+    // Regular grid (divisor) outside patterns + pattern hits inside them (metronome, guidelines)
+    void forEachClick(double from, double to, int divisor, std::function<void(double, TickKind)> const& cb) const;
     // indeks timing pointa obowiazujacego w czasie t (dla t < pierwszy -> 0), -1 gdy pusto
     int indexAt(double t) const;
     double bpmAt(double t) const;

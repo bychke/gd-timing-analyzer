@@ -1,6 +1,7 @@
 // Geometry Dash Timing Analyzer - osu!-style timing editor for the Geometry Dash level editor.
 #include "Session.hpp"
 #include "audio/Metronome.hpp"
+#include "ui/LayoutPopup.hpp"
 #include "ui/TimingEditor.hpp"
 
 #include <Geode/Geode.hpp>
@@ -13,6 +14,7 @@
 #include <Geode/binding/SongInfoObject.hpp>
 #include <Geode/modify/CCMouseDispatcher.hpp>
 #include <Geode/modify/CustomSongLayer.hpp>
+#include <Geode/modify/EditorPauseLayer.hpp>
 #include <Geode/modify/EditorUI.hpp>
 #include <Geode/modify/MusicDownloadManager.hpp>
 
@@ -92,6 +94,12 @@ class $modify(TimingEditorUI, EditorUI) {
         CCLabelBMFont* gridLabel = nullptr;
         CCMenuItemToggler* toggle = nullptr;
         CCMenuItemToggler* waveToggle = nullptr;
+        CCLabelBMFont* divLabel = nullptr;
+        // BPM, WAVE, TIME, 1/N (placed by the buttons-* settings)
+        CCMenu* menu = nullptr;
+        std::array<CCNode*, 4> buttons{};
+        CCPoint menuBase;
+        float step = 0;
         // background waveform
         CCDrawNode* waveNode = nullptr;
         AudioData const* waveAudio = nullptr;
@@ -141,17 +149,32 @@ class $modify(TimingEditorUI, EditorUI) {
                 });
             waveToggle->toggle(s.editorWaveform());
             waveToggle->setID("waveform-toggle"_spr);
-            waveToggle->setPosition({ step, 0 });
             m_fields->waveToggle = waveToggle;
 
             // TIME: opens the timing editor at the current moment of the level (and comes back on close)
-            auto timeLbl = CCLabelBMFont::create("TIME", "bigFont.fnt");
-            timeLbl->setScale(.4f);
-            auto timeSpr = CircleButtonSprite::create(timeLbl, CircleBaseColor::Blue, CircleBaseSize::Small);
+            auto timeSpr = CircleButtonSprite::createWithSprite("note_wave.png"_spr, 1.f, CircleBaseColor::Blue,
+                CircleBaseSize::Small);
             timeSpr->setScale(target / timeSpr->getContentSize().height);
             auto wave = CCMenuItemExt::createSpriteExtra(timeSpr, [](auto) { TimingEditor::openFromEditor(); });
             wave->setID("timing-editor-button"_spr);
-            wave->setPosition({ step * 2, 0 });
+
+            // 1/N: guideline divisor of the whole level (cycles and redraws the guidelines right away)
+            auto divLbl = CCLabelBMFont::create(fmt::format("1/{}", s.guideDivisor()).c_str(), "bigFont.fnt");
+            divLbl->setScale(.45f);
+            auto divSpr = CircleButtonSprite::create(divLbl, CircleBaseColor::Pink, CircleBaseSize::Small);
+            divSpr->setScale(target / divSpr->getContentSize().height);
+            auto divBtn = CCMenuItemExt::createSpriteExtra(divSpr, [divLbl](auto) {
+                auto& s = Session::get();
+                static int const divs[] = { 1, 2, 3, 4, 6, 8 };
+                int cur = s.guideDivisor(), next = divs[0];
+                for (int d : divs)
+                    if (d > cur) { next = d; break; }
+                s.setGuideDivisor(next);
+                divLbl->setString(fmt::format("1/{}", next).c_str());
+                s.applyGuidelines();
+            });
+            divBtn->setID("guide-divisor-button"_spr);
+            m_fields->divLabel = divLbl;
 
             auto menu = CCMenu::create();
             menu->setID("metronome-menu"_spr);
@@ -159,19 +182,48 @@ class $modify(TimingEditorUI, EditorUI) {
             menu->addChild(toggle);
             menu->addChild(waveToggle);
             menu->addChild(wave);
+            menu->addChild(divBtn);
             this->addChild(menu, 10);
+            m_fields->menu = menu;
+            m_fields->buttons = { toggle, waveToggle, wave, divBtn };
+            m_fields->menuBase = local + CCPoint{ gap, 0 };
+            m_fields->step = step;
+            applyButtonLayout();
 
+            // centered under the top bar, away from the buttons of GD and other mods
+            auto win = CCDirector::get()->getWinSize();
             auto label = CCLabelBMFont::create("", "chatFont.fnt");
             label->setID("grid-position"_spr);
             label->setScale(.5f);
-            label->setAnchorPoint({ 0, .5f });
-            label->setPosition(local + CCPoint{ gap + step * 2 + target * 0.6f + 6, 0 });
+            label->setAnchorPoint({ .5f, .5f });
+            label->setPosition({ win.width / 2, win.height - 56 });
             this->addChild(label, 10);
             m_fields->gridLabel = label;
         }
 
         this->schedule(schedule_selector(TimingEditorUI::onTimingTick));
         return true;
+    }
+
+    // Position / size / arrangement of the buttons from the mod settings (re-read every frame, so changes show up live)
+    void applyButtonLayout() {
+        auto& f = m_fields;
+        if (!f->menu) return;
+        auto mod = Mod::get();
+        f->menu->setPosition(f->menuBase + CCPoint{ (float)mod->getSettingValue<int64_t>("buttons-x"),
+                                                    (float)mod->getSettingValue<int64_t>("buttons-y") });
+        f->menu->setScale((float)mod->getSettingValue<double>("buttons-scale"));
+        bool playtest = m_editorLayer && m_editorLayer->m_playbackMode != PlaybackMode::Not;
+        f->menu->setVisible(!(playtest && mod->getSettingValue<bool>("hide-buttons-playtest")));
+        auto layout = mod->getSettingValue<std::string>("buttons-layout");
+        float s = f->step;
+        for (int i = 0; i < 4; i++) {
+            if (!f->buttons[i]) continue;
+            CCPoint pos = layout == "column" ? CCPoint{ 0, -s * i }
+                        : layout == "2x2"    ? CCPoint{ s * (i % 2), -s * (i / 2) }
+                                             : CCPoint{ s * i, 0 };
+            f->buttons[i]->setPosition(pos);
+        }
     }
 
     // Draws the song's waveform behind the objects, aligned with the level (speed portals + song offset)
@@ -256,6 +308,7 @@ class $modify(TimingEditorUI, EditorUI) {
     }
 
     void onTimingTick(float) {
+        applyButtonLayout();
         updateBackgroundWaveform();
         auto& s = Session::get();
         auto engine = FMODAudioEngine::get();
@@ -276,6 +329,11 @@ class $modify(TimingEditorUI, EditorUI) {
             m_fields->toggle->toggle(s.editorMetronome());
         if (m_fields->waveToggle && m_fields->waveToggle->isToggled() != s.editorWaveform())
             m_fields->waveToggle->toggle(s.editorWaveform());
+        // the divisor can also be changed in the Timing window
+        if (m_fields->divLabel) {
+            auto text = fmt::format("1/{}", s.guideDivisor());
+            if (text != m_fields->divLabel->getString()) m_fields->divLabel->setString(text.c_str());
+        }
 
         if (s.map.empty()) {
             label->setString("No timing - open Custom Song > Timing");
@@ -302,6 +360,39 @@ class $modify(TimingEditorUI, EditorUI) {
         auto g = s.map.locate(*t, 4.0);
         label->setString(("Object: " + g.describe()).c_str());
         label->setColor(g.den == 0 ? ccColor3B{ 255, 120, 120 } : ccColor3B{ 140, 255, 140 });
+    }
+};
+
+// ---------------- editor pause menu: button that edits the layout of the editor buttons ----------------
+class $modify(TimingEditorPauseLayer, EditorPauseLayer) {
+    bool init(LevelEditorLayer* lel) {
+        if (!EditorPauseLayer::init(lel)) return false;
+
+        auto spr = CircleButtonSprite::createWithSprite("note_wave.png"_spr, 1.f, CircleBaseColor::Green,
+            CircleBaseSize::Medium);
+        auto btn = CCMenuItemExt::createSpriteExtra(spr, [this](auto) {
+            // back to the editor so the buttons are visible while they are being moved
+            this->onResume(nullptr);
+            LayoutPopup::open();
+        });
+        btn->setID("editor-buttons-layout"_spr);
+
+        // next to Help (and BetterEdit's button) at the bottom, or an own menu without node IDs
+        if (auto menu = this->getChildByIDRecursive("guidelines-menu")) {
+            if (auto first = menu->getChildren() ? static_cast<CCNode*>(menu->getChildren()->objectAtIndex(0)) : nullptr)
+                spr->setScale(first->getScaledContentSize().height / spr->getContentSize().height);
+            menu->addChild(btn);
+            menu->updateLayout();
+        } else {
+            auto win = CCDirector::get()->getWinSize();
+            auto own = CCMenu::create();
+            own->setID("layout-menu"_spr);
+            own->setPosition({ win.width / 2 + 90, 30 });
+            spr->setScale(.8f);
+            own->addChild(btn);
+            this->addChild(own, 10);
+        }
+        return true;
     }
 };
 

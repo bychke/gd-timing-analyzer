@@ -1,5 +1,6 @@
 #pragma once
 #include "../audio/Metronome.hpp"
+#include "../timing/TimingMap.hpp"
 
 #include <Geode/Geode.hpp>
 #include <fmod.hpp>
@@ -38,10 +39,30 @@ private:
         cocos2d::CCNode* node = nullptr;
         cocos2d::CCMenu* menu = nullptr;
         cocos2d::CCLabelBMFont* label = nullptr; // label of the tab button
+        cocos2d::CCNode* button = nullptr;
         std::vector<geode::TextInput*> inputs;
     };
     std::vector<Tab> m_tabs;
     int m_tab = 0;
+    void layoutTabs();
+
+    // rhythm patterns (Rhythm tab)
+    int m_rhythmTab = -1;
+    int m_rhythmSel = -1;
+    int m_rhythmPage = 0; // which bar of the pattern is shown
+    cocos2d::CCMenu* m_rhythmGrid = nullptr;
+    cocos2d::CCLabelBMFont* m_rhythmLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_rhythmLenLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_rhythmLoopsLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_rhythmPageLabel = nullptr;
+    std::string m_rhythmGridKey;
+    void rebuildRhythmGrid();
+    void selectRhythm(int idx);
+    void addRhythmPoint(bool normal);
+    void deleteRhythmPoint();
+    void setRhythmBars(int bars);
+    void rhythmFromAudio();
+    int rhythmMeter(int idx) const;
 
     // view
     double m_viewStart = -500;
@@ -59,12 +80,19 @@ private:
     bool m_fromEditor = false; // sync playback with the level editor on close
     metronome::Tracker m_tracker;
 
+    // undo / redo of timing point edits (Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z)
+    std::vector<TimingMap> m_undo;
+    std::vector<TimingMap> m_redo;
+    TimingMap m_lastMap;           // timing after the last recorded change
+    std::string m_historyKey;      // song + level the history belongs to
+    double m_lastRecord = -10;     // m_clock of the last recorded change (quick edits are merged)
+
     // tap tempo
     std::vector<double> m_taps;
     double m_clock = 0;
 
     // dragging
-    enum class Drag { None, Pending, Scroll, Marker, Overview };
+    enum class Drag { None, Pending, Scroll, Marker, Rhythm, Overview };
     Drag m_drag = Drag::None;
     float m_dragStartX = 0;
     double m_dragStartView = 0;
@@ -83,6 +111,9 @@ private:
     cocos2d::CCLabelBMFont* m_changesLabel = nullptr;
     cocos2d::CCLabelBMFont* m_halfLabel = nullptr;
     cocos2d::CCLabelBMFont* m_offsetLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_soundLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_ticksLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_accentLabel = nullptr;
     Slider* m_musicSlider = nullptr;
     Slider* m_metroSlider = nullptr;
     cocos2d::CCLabelBMFont* m_musicVolLabel = nullptr;
@@ -111,6 +142,10 @@ private:
     void refreshPanel();
     void selectPoint(int idx);
     void changed(); // timing edited -> save + refresh
+    void recordHistory(); // remembers the timing before an edit (call after the edit)
+    void resetHistory();
+    void undo();
+    void redo();
     double timeAtX(float x) const;
     float xAtTime(double t) const;
     bool anyInputFocused() const;
