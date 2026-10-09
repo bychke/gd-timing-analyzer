@@ -12,6 +12,7 @@
 **Level editor**
 
 - [Editor Buttons](Editor-Buttons)
+- [UI Settings](UI-Settings)
 - [Metronome](Metronome)
 - [Guidelines](Guidelines)
 

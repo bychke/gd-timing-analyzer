@@ -6,26 +6,26 @@ This is handy for songs that are not on Newgrounds, or when you want to build on
 ## How to use a file
 
 1. Open the [timing window](Timing-Window) from the level (**TIME** in the editor, or **Custom Song → Timing**).
-2. **Drag the file onto the game window**, or use **Level → Load audio...**.
+2. **Drag the file onto the game window**, or use **Files → Load audio file...**.
 3. With the setting `Use loaded song in the level` on (the default), the level plays that file **right away**.
-   Otherwise press **Level → Use as level song**.
+   Otherwise press **Files → Use as level song**.
 
 The mod gives the level a special **local song ID** that points to your file. Nothing is copied: the file stays where it is.
 The song widget in the level shows the file's name.
 
 ## Going back
 
-**Level → Restore song** puts the level's original song back.
+**Files → Restore original song** puts the level's original song back.
 
 ## Other buttons
 
-- **Load level song**: loads the level's own song into the window (also the active song of a **Jukebox / NONG** mod).
+- **Load level's song**: loads the level's own song into the window (also the active song of a **Jukebox / NONG** mod).
   It does not change the level.
-- **Song starts here / Reset song start**: sets the level's **Start Offset** (where the song begins) to the cursor.
+- **Song** in the **Playback** tab: sets the level's **Start Offset** (where the song begins) to the cursor, back to 0:00, or to a time you type.
 
 ## Important
 
 - **A local song exists only on your PC.** If you upload the level, other players will not hear it. Before publishing,
-  press **Restore song**, or make the level use a real song.
+  press **Restore original song**, or make the level use a real song.
 - If you move or rename the file, the level cannot find it. Load it again.
 - When timing a level, the window always shows the **waveform of the song the level plays**.

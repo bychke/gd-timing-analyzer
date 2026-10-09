@@ -6,9 +6,11 @@ per change.
 
 Open the **Timing Points** tab in the [timing window](Timing-Window).
 
+![Timing Points tab](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/screens/timing-points.png)
+
 ## Selecting
 
-- Click a red marker on the waveform, or use **<** / **>** (keys **Up** / **Down**).
+- Click a red marker on the waveform, or use the **arrows** next to the label (keys **Up** / **Down**).
 - The label shows `Point 2/5`, and the fields show its time, BPM and meter.
 
 ## Adding and deleting
@@ -21,7 +23,7 @@ Open the **Timing Points** tab in the [timing window](Timing-Window).
 
 | Control | What it does |
 |---|---|
-| **Time (ms)** field, or dragging the marker | Where the point starts. Hold **Shift** while dragging to snap to the nearest detected hit |
+| **Time** field, or dragging the marker | Where the point starts, in ms. Hold **Shift** while dragging to snap to the nearest detected hit |
 | **BPM** field | Exact BPM |
 | **x2, /2, x1.5, /1.5** | Multiplies the BPM (fixes half-time and double-time results, and 3/2 feels) |
 | **Meter** field | Beats per bar (1 to 16) |
@@ -29,7 +31,17 @@ Open the **Timing Points** tab in the [timing window](Timing-Window).
 | **All points** | Makes the nudge buttons move **every** point (a global offset) |
 | **Snap to hit** | Moves the point onto the closest detected hit |
 | **Downbeat here** | Makes the beat at the cursor beat 1 of the bar |
-| **Tap** (key **T**) | Tap along with the music. After 4 taps the selected point gets that BPM (or a new point is made) |
+| **Grid** `< 1/4 >` | The snap of the cursor and of the mouse wheel. It does not change the timing |
+
+## Finding the BPM (right side)
+
+- **Analyze!**: listens to the song and finds the BPM, tempo changes and where the beat starts.
+  It **replaces the current timing points** (rhythm patterns stay), so fine-tune them afterwards.
+- **Min / Max**: the BPM search range. If the result is half or double the real tempo, narrow the range
+  (or use **x2 / /2**).
+- **Tempo changes** on: adds a timing point wherever the tempo drifts (live drummers, old recordings).
+  Off: one constant BPM for the whole song (most electronic and studio tracks).
+- **Tap (T)**: tap along with the music. After 4 taps the selected point gets that BPM (or a new point is made).
 
 ## Undo and Redo
 
@@ -42,6 +54,5 @@ Open the **Timing Points** tab in the [timing window](Timing-Window).
 ## Tips
 
 - Zoom in (**Ctrl** + wheel) and put a point's red line on the start of a clear hit, then check the rest with the metronome.
-- A long song with a steady tempo needs **one** point. Do not add points to "fix" small drifts: lower the
-  **Tempo changes** setting in the Analysis tab instead.
+- A long song with a steady tempo needs **one** point. Do not add points to "fix" small drifts: turn **Tempo changes** off instead.
 - Inside one constant BPM, use [Rhythm Patterns](Rhythm-Patterns) to describe a changing rhythm. There is no need to add more points.

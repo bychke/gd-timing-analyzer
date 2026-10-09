@@ -22,8 +22,8 @@
 
 1. Open the level in the editor and press **TIME**. The mod loads the level's own song.
    (To use another file, see [Local Songs](Local-Songs).)
-2. Go to the **Analysis** tab and press **Analyze!**.
-3. Press **Space** to listen. Turn on the **Metronome** in the **Playback** tab, and check that the clicks match the music.
+2. Go to the **Timing Points** tab and press **Analyze!** (right side).
+3. Press **Space** to listen. Turn on the **BPM** metronome in the **Playback** tab, and check that the clicks match the music.
 4. If the clicks drift or are on the wrong beat, fix the timing points: see [Timing Points](Timing-Points).
 5. Close the window. The editor continues exactly where the waveform was.
 

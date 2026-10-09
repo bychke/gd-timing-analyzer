@@ -1,22 +1,33 @@
 # Timing Window
 
-The window has the **waveform** on top, a thin **overview strip** of the whole song under it, a line with the time and
-BPM, the **cursor position** (bar / beat / snap), and seven **tabs** at the bottom.
+Open it with **Custom Song → Timing**, or the **TIME** button in the editor ([Getting Started](Getting-Started)).
+
+The window has, from the top:
+
+1. The title and a **Song** line: the loaded file and where it comes from (`Jukebox NONG`, `Newgrounds / Music Library`,
+   `local file`), and on the right the **Level** name and whether the timing comes from an **osu! file**.
+2. The **waveform** with the beat grid, timing points and the cursor.
+3. A thin **overview strip** of the whole song under it.
+4. An info line: **time / song length** and **BPM** at the cursor, and under it the **cursor position** (bar / beat / snap).
+5. The **tab bar**: **Playback**, **Timing Points**, **Rhythm**, **Files**, and **UI Settings** on the right
+   (only when the window was opened from the level editor).
+6. The **tab panel**. The **i** button in its corner explains the current tab.
 
 ## The waveform
 
 - **Yellow line**: the cursor / play head.
 - **Red lines with a triangle on top**: timing points (the number is the BPM). The selected one is yellow.
 - **Purple lines**: [rhythm patterns](Rhythm-Patterns).
-- **Beat grid**: white = bar line, gray = beat, red = 1/2, blue = 1/4, purple = 1/3 (same colors as osu!).
+- **Beat grid**: white = bar line, gray = beat, red = 1/2, blue = 1/4, purple = 1/3 (the same colors as osu!).
 - **Orange line at the bottom**: detected hits. Beat lines should sit on its peaks.
 - **Green mark**: where the analysis found the first beat.
+- Progress of a running analysis and the result of **Tap** appear in the top right corner of the waveform.
 
 ### Mouse
 
 | Action | Result |
 |---|---|
-| Click the waveform | Moves the cursor (snaps to the grid, hold **Alt** for a free position) |
+| Click the waveform | Moves the cursor (snaps to the **Grid**, hold **Alt** for a free position) |
 | Drag the waveform | Scrolls |
 | Drag a red or purple marker | Moves that point (hold **Shift** to snap a timing point to the nearest hit) |
 | Drag the strip under the waveform | Jumps anywhere in the song |
@@ -24,41 +35,69 @@ BPM, the **cursor position** (bar / beat / snap), and seven **tabs** at the bott
 | **Shift** + wheel | Scrolls |
 | **Ctrl** + wheel | Zooms |
 
-## Tabs
+## Playback
 
-### Playback
+![Playback tab](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/screens/playback.png)
+
+Everything for listening and for the level's song start and guidelines. Three rows:
+
+**Row 1: moving around**
+
 - **Play / Pause** (Space): plays from the cursor.
-- **Metronome**: on or off, shared with the **BPM** button in the editor. See [Metronome](Metronome).
-- **Grid**: snap of the grid and of cursor clicks: 1/1 ... 1/16. This only affects this window.
-- **Zoom - / +**, **Go to cursor**, **To start**.
-- **Sound / Ticks / Bar beat** and the **Music** and **Metronome** volume sliders. Music uses the game's own music volume.
+- **Crosshair**: scrolls the waveform to the cursor.
+- **|◀◀**: jumps to the start of the song.
+- **Magnifiers**: zoom out (**-**) and zoom in (**+**).
 
-### Timing Points
-Add, delete, move and fine-tune timing points. See [Timing Points](Timing-Points).
+**Row 2: metronome**
 
-### Rhythm
-Rhythm patterns inside a constant BPM. See [Rhythm Patterns](Rhythm-Patterns).
+- **BPM ON / OFF**: the metronome. The same switch as the **BPM** button in the level editor. See [Metronome](Metronome).
+- **Sound** `< CLASSIC >`: the click sound (classic, wood, click). Use the arrows or click the name.
+- **Every** `< 1/1 >`: how often it clicks: every beat (1/1), or also between the beats (1/2, 1/3, 1/4).
 
-### Analysis
-- **Analyze!**: listens to the song and finds the BPM, tempo changes and where the beat starts.
-  It **replaces the current timing points** (rhythm patterns stay).
-- **Min BPM / Max BPM**: the search range. If the result is half or double the real tempo, narrow the range
-  (or use **x2 / /2** in Timing Points).
-- **Tempo changes ON**: adds a timing point wherever the tempo drifts (live drummers, old recordings).
-  **OFF**: one constant BPM for the whole song (most electronic and studio tracks).
-- **Tap** (T): tap along with the music. After 4 taps the selected point gets the tapped BPM.
+**Row 3: song start and guidelines**
 
-### Files
-- **Import .osu / Export .osu**: see [osu! Import and Export](osu-Import-and-Export).
-- **Export level / Import level**: saves all of a level's mod data (timing, settings, song start) as one `.json`
-  file, e.g. as a backup or to move it to another PC.
-- **Unload everything**: removes the song, the waveform and **every timing point** of this level, also the saved ones.
+- **Song**: where the level's song starts (its **Start Offset**):
+  the **cursor** button sets it to the yellow cursor, the **|◀◀** button sets it back to 0:00, and you can type the
+  start in seconds into the field.
+  This needs a level (it says *Open this from a level* otherwise).
+- **Guidelines**: the green **lines** button creates the beat lines in the editor, the red **crossed lines** button removes them,
+  and the pink **1/N** button is the snap of the guidelines (the same as the **1/N** button in the editor).
+  See [Guidelines](Guidelines).
 
-### Level
-- **Load audio...**: any mp3 / ogg / wav / flac / m4a. The level starts using it right away (see [Local Songs](Local-Songs)).
-- **Load level song**: loads the level's own song (a Jukebox NONG too).
-- **Use as level song / Restore song**: see [Local Songs](Local-Songs).
-- **Song starts here / Reset song start**: sets the level's **Start Offset** to the cursor.
+**Sliders** (right): **Music** (the game's own music volume, so the window and the editor sound the same) and
+**Metronome** volume.
 
-### Guidelines
-See [Guidelines](Guidelines).
+## Timing Points
+
+![Timing Points tab](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/screens/timing-points.png)
+
+**Left side**: add, delete, move and fine-tune the timing points. **Right side**: finding the BPM automatically or by tapping.
+Every control is explained in [Timing Points](Timing-Points).
+
+- **Point 1/3** with arrows: the selected point. **+ Add** and **Delete**.
+- **Grid** `< 1/4 >`: the snap of the cursor and of the mouse wheel (1/1 ... 1/16). This only changes this window.
+- **Analyze!**, **Tap (T)**, **Min / Max** BPM and **Tempo changes**.
+- **Undo / Redo**.
+
+## Rhythm
+
+![Rhythm tab](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/screens/rhythm.png)
+
+Rhythm patterns inside a constant BPM: a different rhythm without more timing points. Everything is explained in
+[Rhythm Patterns](Rhythm-Patterns).
+
+## Files
+
+![Files tab](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/screens/files.png)
+
+| Row | Buttons |
+|---|---|
+| **Song file** | **Load audio file...** loads any mp3 / ogg / wav / flac / m4a. **Load level's song** loads the level's own song (a Jukebox NONG too) |
+| **In the level** | **Use as level song** makes the level play the loaded file. **Restore original song** puts the original back. See [Local Songs](Local-Songs) |
+| **osu! timing** | **Import from .osu** and **Export to .osu**. See [osu! Import and Export](osu-Import-and-Export) |
+| **Level backup** | **Import backup** / **Export backup**: all of a level's mod data (timing, rhythm patterns, settings, song start) as one `.json` file |
+| (bottom right) | **Unload everything** removes the song, the waveform and **every timing point** of this level, also the saved ones |
+
+## UI Settings
+
+Opens the live preview of the editor's buttons, texts and guideline colors. See [UI Settings](UI-Settings).

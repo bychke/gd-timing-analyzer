@@ -1,37 +1,31 @@
 # Settings
 
-Open them in the game: **Geode → Mods → Geometry Dash Timing Analyzer → Settings**.
-Many of them can also be changed inside the mod (the place is in brackets).
+Open them in the game: **Geode → Mods → Geometry Dash Timing Analyzer → Settings**, or in the level editor:
+**ESC → the green note button**.
 
-## Metronome
+## In the mod settings
+
 | Setting | Default | What it does |
 |---|---|---|
-| Metronome volume | 70 | Volume of the clicks, 0 to 100 (also the slider in the Playback tab) |
-| Metronome sound | classic | `classic`, `wood`, `click` (also the **Sound** button in the Playback tab) |
-| Metronome ticks | 1/1 | `1/1`, `1/2`, `1/3`, `1/4`: quieter clicks between beats (the **Ticks** button) |
-| First beat of a bar volume (%) | 160 | How loud the first beat of a bar is, 100 to 300 (the **Bar beat** button) |
 | Metronome offset (ms) | 0 | Plays the clicks earlier (+) or later (-) to match your audio latency, -200 to 200 |
-
-## Editor
-| Setting | Default | What it does |
-|---|---|---|
-| Show beat of selected object | on | The "Object: Bar … Beat …" label at the top of the editor |
 | Automatic guidelines | on | Guidelines are redrawn after every timing change. See [Guidelines](Guidelines) |
+| Custom guideline colors | on | The mod draws the guidelines itself in the bright waveform colors, instead of GD's green / yellow / orange. These lines are not saved in the level |
 | Use loaded song in the level | on | A file you load in the timing window becomes the level's song right away. See [Local Songs](Local-Songs) |
 
-## Editor buttons
-See [Editor Buttons](Editor-Buttons).
+## In the mod itself
 
-| Setting | Default | What it does |
-|---|---|---|
-| Hide buttons while playtesting | on | The four buttons disappear during a playtest |
-| Editor buttons layout | row | `row`, `2x2` or `column` |
-| Editor buttons X / Y | 0 / 0 | Moves the buttons (-500 to 500 and -300 to 300) |
-| Editor buttons size | 1.0 | 0.5 to 1.5 |
+Everything else is changed where you use it, and saved:
 
-The position and size can be set in the editor with a live preview: **ESC → the note button next to Help**.
+| What | Where |
+|---|---|
+| Metronome on / off, sound, how often it clicks, volume | **Playback** tab ([Metronome](Metronome)) |
+| Guideline snap (1/N) | the **1/N** button in the editor, or in the **Playback** tab |
+| BPM range and tempo changes of the analysis | **Timing Points** tab |
+| Position, size, layout and visibility of the editor buttons | [UI Settings → Buttons](UI-Settings#buttons) |
+| The texts at the top of the editor | [UI Settings → Text](UI-Settings#text) |
+| Colors and thickness of the guidelines and the waveform | [UI Settings → Guideline Colors](UI-Settings#guideline-colors) |
 
-## Not in the settings
+## Saved per level
 
 These are saved **per level** (not global): the guideline snap (1/N), the BPM range and "tempo changes" of the analysis,
 the metronome switch, the WAVE switch, the timing and the rhythm patterns.

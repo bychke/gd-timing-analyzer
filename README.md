@@ -10,18 +10,18 @@ An osu!-style timing analyzer for the Geometry Dash level editor (Geode mod) by
 Load a song, see its waveform, let the mod find the BPM, tempo changes and first beat, fine-tune the
 timing points like in osu!, and build your level exactly on the beat.
 
-![Timing window](docs/timing-window.gif)
+![Timing window](docs/screens/playback.png)
 
 ## Features
 
-- **Waveform** with a beat grid (1/1 ... 1/16), zoom and scrolling
+- **Waveform** with a beat grid (1/1 ... 1/16), zoom and scrolling, in four tabs: Playback, Timing Points, Rhythm, Files
 - **Automatic analysis** of the BPM, tempo changes and first beat
 - **Editable timing points** with **undo / redo**
 - **Rhythm patterns**: a changing rhythm inside one BPM (1/4, then four fast 1/6 hits...)
 - **Metronome** shared by the timing window and the editor, with 3 sounds and an accented first beat
 - **Editor buttons**: **BPM** (metronome), **WAVE** (waveform behind the level), **TIME** (opens the timing window
-  at the selected object), **1/N** (guideline snap). Movable and resizable
-- **Guidelines** made from your timing, updated automatically; **song start offset** from the waveform cursor
+  at the selected object), **1/N** (guideline snap). Movable, resizable and hideable in **UI Settings**
+- **Guidelines** made from your timing, updated automatically, in custom colors; **song start offset** from the waveform cursor
 - **osu! beatmap import / export**
 - **Local songs**: a level can play any mp3 / ogg / wav / flac from your PC (works with Jukebox NONGs)
 - **Per-level data**: every level has its own song, timing and settings, exportable as one file
@@ -40,7 +40,7 @@ timing points like in osu!, and build your level exactly on the beat.
 ## Guide
 
 Every part of the mod is explained in the **[Wiki](../../wiki)**: the timing window, timing points, rhythm patterns,
-editor buttons, metronome, guidelines, local songs, osu! import, settings, shortcuts and a FAQ.
+editor buttons, UI settings, metronome, guidelines, local songs, osu! import, settings, shortcuts and a FAQ.
 
 ## Usage
 

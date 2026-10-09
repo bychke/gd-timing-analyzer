@@ -6,7 +6,7 @@ Already have a timed osu! map for your song? You can take its timing straight in
 
 ## Import
 
-1. **Drag a `.osu` file onto the game window**, or use **Files → Import .osu**.
+1. **Drag a `.osu` file onto the game window**, or use **Files → Import from .osu**.
 2. Pick the right file: every difficulty is its own `.osu` in the beatmap folder (`osu!/Songs/<beatmap>/`),
    named `Artist - Title (Mapper) [Difficulty].osu`.
 
@@ -23,11 +23,11 @@ What happens:
 
 ## Export
 
-**Files → Export .osu** saves your timing as an osu! `[TimingPoints]` section. It is not a full beatmap:
+**Files → Export to .osu** saves your timing as an osu! `[TimingPoints]` section. It is not a full beatmap:
 paste it into the `[TimingPoints]` part of a `.osu` file, or use it to check your timing in the osu! editor.
 Rhythm patterns are not exported (osu! has no such thing).
 
 ## Whole-level backup
 
-**Export level** / **Import level** (also in the Files tab) save and load **everything** of a level: timing, rhythm patterns,
+**Export backup** / **Import backup** (also in the **Files** tab) save and load **everything** of a level: timing, rhythm patterns,
 settings and song start. Use it as a backup, or to move your work to another PC.

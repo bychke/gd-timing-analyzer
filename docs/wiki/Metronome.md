@@ -1,11 +1,11 @@
 # Metronome
 
 The metronome clicks on the beats of your timing. It is **one metronome** for the timing window and the level editor:
-the **Metronome** button in the window and the **BPM ON / OFF** button in the editor are the same switch.
+the **BPM ON / OFF** button in the window's **Playback** tab and the **BPM** button in the editor are the same switch.
 
 ## Using it
 
-- In the **timing window**: turn it on in the **Playback** tab and press Space.
+- In the **timing window**: press **BPM** in the **Playback** tab (green = on) and press Space.
 - In the **editor**: press **BPM** and play the level's music (the editor's play button). The clicks follow the music.
 
 ## What it plays
@@ -15,15 +15,14 @@ the **Metronome** button in the window and the **BPM ON / OFF** button in the ed
 
 ## Options
 
-Set in the **Playback** tab (right side) or in the [mod settings](Settings):
+In the **Playback** tab ([Timing Window](Timing-Window#playback)), row 2 and the sliders:
 
 | Option | What it does |
 |---|---|
-| **Sound** | `classic` (a short beep), `wood` (a dry knock), `click` (a very short tick). Changing it plays a preview |
-| **Ticks** | `1/1` = a click on every beat. `1/2`, `1/3`, `1/4` = also quieter clicks between the beats (only outside rhythm patterns) |
-| **Bar beat** | How loud the first beat of a bar is compared to the others, 100% to 300% |
-| **Metronome volume** | The slider in the Playback tab (0 to 100) |
-| **Metronome offset (ms)** | Settings only. Plays the clicks earlier (positive) or later (negative) to match your audio latency |
+| **Sound** `< CLASSIC >` | `classic` (a short beep), `wood` (a dry knock), `click` (a very short tick). Changing it plays a preview |
+| **Every** `< 1/1 >` | `1/1` = a click on every beat. `1/2`, `1/3`, `1/4` = also quieter clicks between the beats (only outside rhythm patterns) |
+| **Metronome** slider | The volume of the clicks (0 to 100) |
+| **Metronome offset (ms)** | In the [mod settings](Settings). Plays the clicks earlier (positive) or later (negative) to match your audio latency |
 
 ## Tips
 
