@@ -3,7 +3,7 @@
 An osu!-style timing analyzer for the Geometry Dash level editor. Load a song, let the mod find its BPM, fine-tune the
 timing points, and build your level exactly on the beat.
 
-![Timing window](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/screens/playback.png)
+![Timing window](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/screens/window.png)
 
 ## Where to start
 

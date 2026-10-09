@@ -10,7 +10,7 @@ An osu!-style timing analyzer for the Geometry Dash level editor (Geode mod) by
 Load a song, see its waveform, let the mod find the BPM, tempo changes and first beat, fine-tune the
 timing points like in osu!, and build your level exactly on the beat.
 
-![Timing window](docs/screens/playback.png)
+![Timing window](docs/screens/window.png)
 
 ## Features
 

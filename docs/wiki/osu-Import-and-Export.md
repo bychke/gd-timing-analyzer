@@ -2,7 +2,7 @@
 
 Already have a timed osu! map for your song? You can take its timing straight into Geometry Dash.
 
-![Imported osu! timing](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/osu-import.png)
+![The Files tab](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/screens/files.png)
 
 ## Import
 

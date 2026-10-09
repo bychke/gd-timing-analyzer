@@ -2,6 +2,8 @@
 
 Open it with **Custom Song → Timing**, or the **TIME** button in the editor ([Getting Started](Getting-Started)).
 
+![Timing window](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/screens/window.png)
+
 The window has, from the top:
 
 1. The title and a **Song** line: the loaded file and where it comes from (`Jukebox NONG`, `Newgrounds / Music Library`,
