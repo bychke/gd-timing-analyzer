@@ -19,8 +19,8 @@ In the **Playback** tab ([Timing Window](Timing-Window#playback)), row 2 and the
 
 | Option | What it does |
 |---|---|
-| **Sound** `< CLASSIC >` | `classic` (a short beep), `wood` (a dry knock), `click` (a very short tick). Changing it plays a preview |
-| **Every** `< 1/1 >` | `1/1` = a click on every beat. `1/2`, `1/3`, `1/4` = also quieter clicks between the beats (only outside rhythm patterns) |
+| **SFX** (black note) | The sound: `classic` (a short beep) or `wood` (a dry knock). Every click switches it and plays a preview |
+| **1/N** (pink) | `1/1` = a click on every beat. `1/2`, `1/3`, `1/4` = also quieter clicks between the beats (only outside rhythm patterns) |
 | **Metronome** slider | The volume of the clicks (0 to 100) |
 | **Metronome offset (ms)** | In the [mod settings](Settings). Plays the clicks earlier (positive) or later (negative) to match your audio latency |
 
@@ -28,3 +28,5 @@ In the **Playback** tab ([Timing Window](Timing-Window#playback)), row 2 and the
 
 - If the clicks are slightly late or early on **every** beat, it is your audio latency: use the offset, not the timing points.
 - The music volume of the window is the game's own music volume, so the window and the editor sound the same.
+- To hear a fast part better, slow the song down with **Speed** in the **Playback** tab (100% / 75% / 50% / 25%).
+  The metronome follows the slower song.

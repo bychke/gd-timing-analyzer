@@ -20,11 +20,11 @@ That part is inside a [rhythm pattern](Rhythm-Patterns). Guidelines and metronom
 Place a **Normal grid** point where the pattern should stop.
 
 ### My guidelines disappeared or changed.
-With **Automatic guidelines** on, they are redrawn after every timing change and replace the ones that were in the level.
+With **Automatic Guidelines** on (the checkmark in the **Playback** tab), they are redrawn after every timing change and replace the ones that were in the level.
 Turn the setting off in the [settings](Settings) if you want to keep hand-made guidelines.
 
 ### The editor buttons cover other buttons (BetterEdit and others).
-Move them: **TIME → UI Settings**, then drag outside the window. See [UI Settings](UI-Settings).
+Move them: **ESC → UI** in the editor, then drag outside the window. See [UI Settings](UI-Settings).
 
 ### The buttons are gone while I playtest.
 That is **Hide in playtest** in [UI Settings](UI-Settings#buttons). Turn it off there.

@@ -209,6 +209,7 @@ bool LayoutPopup::init() {
 }
 
 void LayoutPopup::onClose(CCObject* sender) {
+    (void)Mod::get()->saveData(); // the settings are on disk even if the game crashes later
     Popup::onClose(sender);
     if (!m_returnToPause) return;
     // opened from the pause menu: back to it

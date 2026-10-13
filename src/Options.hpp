@@ -17,6 +17,8 @@ inline std::map<std::string, matjson::Value> const& defaults() {
         // metronome (TIME > Playback)
         { "metronome-volume", (int64_t)70 }, { "metronome-sound", std::string("classic") },
         { "metronome-ticks", std::string("1/1") }, { "metronome-accent", (int64_t)160 },
+        // guidelines (AUTO button in Playback)
+        { "auto-guidelines", true },
         // editor buttons / texts (Editor Settings)
         { "show-object-beat", true }, { "center-text-colors", true }, { "text-x", (int64_t)0 }, { "text-y", (int64_t)0 },
         { "hide-buttons-playtest", true }, { "buttons-layout", std::string("row") }, { "buttons-x", (int64_t)0 },

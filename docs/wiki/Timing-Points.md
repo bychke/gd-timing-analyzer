@@ -31,7 +31,7 @@ Open the **Timing Points** tab in the [timing window](Timing-Window).
 | **All points** | Makes the nudge buttons move **every** point (a global offset) |
 | **Snap to hit** | Moves the point onto the closest detected hit |
 | **Downbeat here** | Makes the beat at the cursor beat 1 of the bar |
-| **Grid** `< 1/4 >` | The snap of the cursor and of the mouse wheel. It does not change the timing |
+| **pink 1/N** (top of the window) | The waveform grid: the snap of the cursor and of the mouse wheel. It does not change the timing |
 
 ## Finding the BPM (right side)
 
@@ -45,9 +45,9 @@ Open the **Timing Points** tab in the [timing window](Timing-Window).
 
 ## Undo and Redo
 
-- **Ctrl+Z** undoes, **Ctrl+Y** or **Ctrl+Shift+Z** redoes. The **Undo** / **Redo** buttons do the same.
-- It works for timing points and [rhythm patterns](Rhythm-Patterns): adding, deleting, dragging, nudging, BPM changes,
-  analysis results and imports.
+- **Ctrl+Z** undoes, **Ctrl+Y** or **Ctrl+Shift+Z** redoes. The green **Undo** / **Redo** arrows in the top left corner do the same.
+- It works for timing points, [rhythm patterns](Rhythm-Patterns), the **Song Start** and the guideline **1/N**:
+  adding, deleting, dragging, nudging, BPM changes, analysis results and imports.
 - Several quick edits in a row (clicking **+1** a few times, typing a value) count as one step.
 - The history holds 200 steps. It starts again when you change the song or the level, and is not kept after you close the window.
 

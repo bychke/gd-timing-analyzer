@@ -8,6 +8,7 @@
 - [Timing Window](Timing-Window)
 - [Timing Points](Timing-Points)
 - [Rhythm Patterns](Rhythm-Patterns)
+- [Triggers](Triggers)
 
 **Level editor**
 

@@ -1,14 +1,13 @@
 # Settings
 
 Open them in the game: **Geode → Mods → Geometry Dash Timing Analyzer → Settings**, or in the level editor:
-**ESC → the green note button**.
+**ESC → the green gear + note button**.
 
 ## In the mod settings
 
 | Setting | Default | What it does |
 |---|---|---|
 | Metronome offset (ms) | 0 | Plays the clicks earlier (+) or later (-) to match your audio latency, -200 to 200 |
-| Automatic guidelines | on | Guidelines are redrawn after every timing change. See [Guidelines](Guidelines) |
 | Custom guideline colors | on | The mod draws the guidelines itself in the bright waveform colors, instead of GD's green / yellow / orange. These lines are not saved in the level |
 | Use loaded song in the level | on | A file you load in the timing window becomes the level's song right away. See [Local Songs](Local-Songs) |
 
@@ -20,6 +19,9 @@ Everything else is changed where you use it, and saved:
 |---|---|
 | Metronome on / off, sound, how often it clicks, volume | **Playback** tab ([Metronome](Metronome)) |
 | Guideline snap (1/N) | the **1/N** button in the editor, or in the **Playback** tab |
+| Automatic Guidelines | the checkmark in the **Playback** tab ([Guidelines](Guidelines#automatic-guidelines)) |
+| Playback speed, following the cursor | the **Speed** clock and the **Follow** button in the **Playback** tab |
+| The waveform grid (where the cursor snaps) | the pink **1/N** at the top of the window |
 | BPM range and tempo changes of the analysis | **Timing Points** tab |
 | Position, size, layout and visibility of the editor buttons | [UI Settings → Buttons](UI-Settings#buttons) |
 | The texts at the top of the editor | [UI Settings → Text](UI-Settings#text) |

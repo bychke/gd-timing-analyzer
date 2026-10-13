@@ -5,7 +5,7 @@
 	},
 	"id": "bychke.gd-timing-analyzer",
 	"name": "Geometry Dash Timing Analyzer",
-	"version": "v1.2.0",
+	"version": "v1.3.0",
 	"developer": "bychke",
 	"tags": [
 		"editor",
@@ -28,12 +28,6 @@
 				"arrows": true,
 				"arrow-step": 5
 			}
-		},
-		"auto-guidelines": {
-			"type": "bool",
-			"name": "Automatic guidelines",
-			"description": "The editor guidelines update by themselves after every timing change (adding, moving or deleting a timing point, analysis, .osu import). Replaces guidelines added by hand.",
-			"default": true
 		},
 		"custom-guideline-colors": {
 			"type": "bool",

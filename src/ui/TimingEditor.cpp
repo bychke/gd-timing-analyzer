@@ -9,6 +9,7 @@
 #include <Geode/binding/FMODAudioEngine.hpp>
 #include <Geode/binding/GameManager.hpp>
 #include <Geode/ui/MDPopup.hpp>
+#include <Geode/ui/ColorPickPopup.hpp>
 #include <Geode/ui/BasedButtonSprite.hpp>
 #include <Geode/binding/LevelEditorLayer.hpp>
 
@@ -19,18 +20,20 @@
 using namespace geode::prelude;
 
 namespace {
-constexpr float POP_W = 540.f, POP_H = 288.f;
+constexpr float POP_W = 540.f, POP_H = 312.f;
 // waveform area (m_mainLayer coordinates)
-constexpr float WX = 15.f, WY = 154.f, WW = 510.f, WH = 92.f;
+constexpr float WX = 15.f, WY = 178.f, WW = 510.f, WH = 92.f;
 // whole-song overview strip
-constexpr float OX = 15.f, OY = 141.f, OW = 510.f, OH = 9.f;
+constexpr float OX = 15.f, OY = 165.f, OW = 510.f, OH = 9.f;
 // tab content panel
 constexpr float PY0 = 6.f, PY1 = 113.f;
 // rows inside the panel: round buttons (RA) with their captions (RC) under them, then a row of small controls (RB)
 constexpr float HY = 75.f, RA = 55.f, RC = 35.f, RB = 16.f;
 constexpr int kArrowTextTag = 7701;
 constexpr float kButtonScale = .5f;
-constexpr float kTabY = 127.f, kTabH = 24.f; // the tabs fill the strip between the overview and the panel
+// the tabs: two rows in the strip between the overview and the panel, three equal cells per row
+constexpr float kTabY1 = 151.f, kTabY2 = 127.f, kTabH = 22.f;
+constexpr float kTabLeft = 140.f, kTabGap = 3.f, kTabW = (WX + WW - kTabLeft - 2 * kTabGap) / 3;
 constexpr float kWindowScale = .9f; // the whole window, drawn 10% smaller
 
 ccColor4F rgba(float r, float g, float b, float a = 1.f) { return { r, g, b, a }; }
@@ -168,15 +171,15 @@ TimingEditor::Tab& TimingEditor::addTab(char const* name, float x, char const* i
     return m_tabs.back();
 }
 
-// icon + name on a gray GD button, as tall as the strip (layoutTabs() places them; width 0 = natural width)
+// icon + name on a gray GD button (layoutTabs() places them; width 0 = natural width)
 void TimingEditor::makeTabButton(int idx, float width) {
     auto& t = m_tabs[idx];
-    float x = 0;
+    CCPoint pos{ 0, kTabY1 };
     if (t.button) {
-        x = t.button->getPositionX();
+        pos = t.button->getPosition();
         t.button->removeFromParent();
     }
-    t.button = addPill(m_menu, t.name, t.iconName, "GJ_button_04.png", { x, kTabY }, width, kTabH,
+    t.button = addPill(m_menu, t.name, t.iconName, "GJ_button_04.png", pos, width, kTabH,
                        [this, idx] { switchTab(idx); }, false, &t.label, .42f);
     t.bg = static_cast<CCMenuItemSpriteExtra*>(t.button)->getNormalImage()->getChildByTag(1);
 }
@@ -328,25 +331,30 @@ void TimingEditor::addCaption(Tab& tab, char const* text, CCPoint pos) {
     tab.node->addChild(l);
 }
 
-// the tab buttons side by side between the position info (left) and UI Settings (right), with room on both sides
+// the tab buttons in two rows of three equal cells right of the position info:
+// Playback, Timing Points, Rhythm / (free: room for the cursor text) Files, Triggers
 void TimingEditor::layoutTabs() {
-    float const gap = 3, left = 140;
-    float right = (m_settingsBtn ? m_settingsBtn->getPositionX() - m_settingsBtn->getScaledContentSize().width / 2
-                                 : WX + WW) - 12;
-    float gaps = gap * (m_tabs.size() - 1), total = gaps;
-    for (auto const& t : m_tabs) total += t.button->getScaledContentSize().width;
-    // too wide: every tab gets narrower by the same factor (the names shrink to fit)
-    if (total > right - left) {
-        float k = (right - left - gaps) / (total - gaps);
-        for (int i = 0; i < (int)m_tabs.size(); i++) makeTabButton(i, m_tabs[i].button->getScaledContentSize().width * k);
-        total = right - left;
+    for (int i = 0; i < (int)m_tabs.size(); i++) {
+        int row = i / 3, col = i % 3 + (row == 1 ? 1 : 0);
+        makeTabButton(i, kTabW);
+        m_tabs[i].button->setPosition({ kTabLeft + col * (kTabW + kTabGap) + kTabW / 2, row == 0 ? kTabY1 : kTabY2 });
     }
-    float x = left + std::max(0.f, (right - left - total) / 2);
-    for (auto const& t : m_tabs) {
-        float w = t.button->getScaledContentSize().width;
-        t.button->setPositionX(x + w / 2);
-        x += w + gap;
+    if (m_settingsBtn) m_settingsBtn->setPosition({ kTabLeft + 2 * (kTabW + kTabGap) + kTabW / 2, kTabY2 });
+}
+
+// a short message above the window
+void TimingEditor::toast(std::string const& text) {
+    if (!m_toast || !m_toastLabel) return;
+    m_toastLabel->setString(text.c_str());
+    m_toastLabel->limitLabelWidth(330, .38f, .15f);
+    float w = m_toastLabel->getScaledContentSize().width + 18, h = 16;
+    if (auto bg = typeinfo_cast<CCScale9Sprite*>(m_toast->getChildByTag(1))) {
+        bg->setContentSize({ w * 4, h * 4 });
+        bg->setScale(.25f);
     }
+    m_toast->stopAllActions();
+    m_toast->setVisible(true);
+    m_toast->runAction(CCSequence::create(CCDelayTime::create(.5f), CCHide::create(), nullptr));
 }
 
 void TimingEditor::switchTab(int idx) {
@@ -363,6 +371,7 @@ void TimingEditor::switchTab(int idx) {
             bg->setColor(on ? ccColor3B{ 255, 255, 255 } : ccColor3B{ 150, 150, 150 });
     }
     if (m_helpBtn) m_helpBtn->setVisible(!m_tabs[idx].help.empty());
+    refreshTriggerTab();
 }
 
 TextInput* TimingEditor::addInput(Tab& tab, char const* caption, float x, float y, float width,
@@ -491,12 +500,12 @@ bool TimingEditor::init() {
     m_infoLabel = CCLabelBMFont::create("", "chatFont.fnt");
     m_infoLabel->setScale(.5f);
     m_infoLabel->setAnchorPoint({ 0, .5f });
-    m_infoLabel->setPosition({ WX, 132 });
+    m_infoLabel->setPosition({ WX, kTabY1 });
     m_mainLayer->addChild(m_infoLabel);
 
     m_statusLabel = CCLabelBMFont::create("", "chatFont.fnt");
     m_statusLabel->setScale(.5f);
-    // top right corner of the waveform (the right end of the info row is UI Settings)
+    // top right corner of the waveform (the tabs are on the right of the info rows)
     m_statusLabel->setAnchorPoint({ 1, 1 });
     m_statusLabel->setPosition({ WX + WW - 3, WY + WH - 2 });
     m_statusLabel->setColor({ 120, 255, 120 });
@@ -506,8 +515,29 @@ bool TimingEditor::init() {
     m_gridLabel = CCLabelBMFont::create("", "chatFont.fnt");
     m_gridLabel->setScale(.5f);
     m_gridLabel->setAnchorPoint({ 0, .5f });
-    m_gridLabel->setPosition({ WX, 119 });
+    m_gridLabel->setPosition({ WX, kTabY2 });
     m_mainLayer->addChild(m_gridLabel);
+
+    // short messages above the window ("... turned on / off")
+    m_toast = CCNode::create();
+    m_toast->setPosition({ POP_W / 2, POP_H + 11 }); // above the window
+    m_toast->setVisible(false);
+    auto toastBg = CCScale9Sprite::create("square02b_001.png", { 0, 0, 80, 80 });
+    toastBg->setColor({ 0, 0, 0 });
+    toastBg->setOpacity(190);
+    toastBg->setTag(1);
+    m_toast->addChild(toastBg);
+    m_toastLabel = CCLabelBMFont::create("", "bigFont.fnt");
+    m_toast->addChild(m_toastLabel, 1);
+    m_mainLayer->addChild(m_toast, 20);
+
+    // "Song Start" next to its line on the waveform
+    m_startLabel = CCLabelBMFont::create("Song Start", "chatFont.fnt");
+    m_startLabel->setScale(.4f);
+    m_startLabel->setAnchorPoint({ 0, .5f });
+    m_startLabel->setColor({ 64, 255, 204 });
+    m_startLabel->setVisible(false);
+    m_mainLayer->addChild(m_startLabel, 3);
 
     // tab bar + always-visible play button
     m_menu = CCMenu::create();
@@ -570,7 +600,17 @@ bool TimingEditor::init() {
     auto desc = [&](Tab& t, char const* text) {
         std::string d = text;
         for (size_t i; (i = d.find("\n   ")) != std::string::npos;) d.replace(i, 4, " ");
-        for (size_t i = 0; (i = d.find('\n', i)) != std::string::npos; i += 2) d.insert(i, "\n");
+        // an empty line between the lines, except inside a list ("- " / "1. " lines stay together)
+        auto isItem = [&](size_t at) {
+            return d.compare(at, 2, "- ") == 0 || (at + 1 < d.size() && std::isdigit((unsigned char)d[at]) && d[at + 1] == '.');
+        };
+        for (size_t i = 0; (i = d.find('\n', i)) != std::string::npos;) {
+            size_t lineStart = d.rfind('\n', i - 1);
+            lineStart = lineStart == std::string::npos || i == 0 ? 0 : lineStart + 1;
+            if (isItem(lineStart) && isItem(i + 1)) { i += 1; continue; }
+            d.insert(i, "\n");
+            i += 2;
+        }
         if (!t.help.empty()) t.help += "\n\n";
         t.help += d;
     };
@@ -593,8 +633,15 @@ bool TimingEditor::init() {
             return l;
         };
 
-        // row 1: play, go to the cursor, back to the start, zoom
+        // row 1 "Main": to the start, play, to the end | the waveform: to the cursor, to Song Start, follow
         row(t, 16, YA);
+        text("Main");
+        fx += 4;
+        round("ta_to_start.png"_spr, CircleBaseColor::Green, [this] {
+            seek(0);
+            m_viewStart = -500;
+            toast("Back to the start of the song");
+        });
         {
             // GD's own play / stop music button
             auto spr = CCSprite::createWithSpriteFrameName("GJ_playMusicBtn_001.png");
@@ -605,22 +652,53 @@ bool TimingEditor::init() {
             t.menu->addChild(b);
             fx += 31;
         }
-        round("ta_goto.png"_spr, CircleBaseColor::Green, [this] { m_viewStart = m_cursor - WW * m_msPerPx / 2; });
-        round("ta_to_start.png"_spr, CircleBaseColor::Green, [this] { seek(0); m_viewStart = -500; });
-        auto iconBtn = [&](char const* name, geode::Function<void()> cb) {
-            auto spr = CCSprite::create(name);
-            spr->setScale(26.f / spr->getContentSize().height);
-            auto b = CCMenuItemExt::createSpriteExtra(spr, [cb = std::move(cb)](auto) mutable { cb(); });
-            b->setPosition({ fx + 13, fy });
-            t.menu->addChild(b);
+        // jump to the end of the song
+        round("ta_to_end.png"_spr, CircleBaseColor::Green, [this] {
+            double end = songLength();
+            seek(std::max(0.0, end - 50));
+            m_viewStart = end - WW * m_msPerPx * 0.75;
+            toast("Jumped to the end of the song");
+        });
+        round("ta_goto.png"_spr, CircleBaseColor::Green, [this] {
+            m_viewStart = m_cursor - WW * m_msPerPx / 2;
+            toast("Waveform scrolled to the cursor");
+        });
+        round("ta_goto_song.png"_spr, CircleBaseColor::Blue, [this] {
+            auto ls = Session::levelSettings();
+            if (!ls) {
+                Notification::create("Open this from a level (editor or song selection)", NotificationIcon::Error)->show();
+                return;
+            }
+            m_viewStart = ls->m_songOffset * 1000.0 - WW * m_msPerPx / 2;
+            toast("Waveform scrolled to Song Start");
+        });
+        // follow: while playing the waveform scrolls with the cursor (off = it stays where you put it)
+        m_followPlay = Mod::get()->getSavedValue<bool>("follow-playback", true);
+        {
+            auto makeSpr = [this](bool on) {
+                auto spr = CircleButtonSprite::create(roundIcon("ta_follow.png"_spr, .62f),
+                    on ? CircleBaseColor::Green : CircleBaseColor::Gray, CircleBaseSize::Small);
+                spr->setScale(26.f / spr->getContentSize().height);
+                return spr;
+            };
+            auto tg = CCMenuItemExt::createToggler(makeSpr(true), makeSpr(false), [this](CCMenuItemToggler* tgl) {
+                // the callback runs before the toggler flips
+                m_followPlay = !tgl->isToggled();
+                Mod::get()->setSavedValue<bool>("follow-playback", m_followPlay);
+                toast(m_followPlay ? "Following the cursor turned on" : "Following the cursor turned off");
+            });
+            tg->setPosition({ fx + 13, fy });
+            t.menu->addChild(tg);
+            setCheck(tg, m_followPlay);
             fx += 31;
-        };
-        fx += 8;
-        iconBtn("ta_zoom_out.png"_spr, [this] { zoom(1.5, m_viewStart + WW * m_msPerPx / 2); });
-        iconBtn("ta_zoom_in.png"_spr, [this] { zoom(1 / 1.5, m_viewStart + WW * m_msPerPx / 2); });
+        }
+        m_rate = std::clamp((float)Mod::get()->getSavedValue<double>("playback-speed", 1.0), .25f, 1.f);
 
-        // row 2: metronome (one for the waveform and the level editor's BPM button), its sound and how often it clicks
+        // row 2 "Metronome": BPM, the waveform in the editor, the sound and how often it clicks
         row(t, 16, YB);
+        text("Metronome");
+        fx += 4;
+        // metronome (one for the waveform and the level editor's BPM button), next to follow
         {
             // same green "BPM ON / gray BPM OFF" round button as in the level editor
             auto makeSpr = [](bool on) {
@@ -632,50 +710,121 @@ bool TimingEditor::init() {
                 spr->setScale(26.f / spr->getContentSize().height);
                 return spr;
             };
-            m_metroCheck = CCMenuItemExt::createToggler(makeSpr(true), makeSpr(false), [](CCMenuItemToggler* tg) {
+            m_metroCheck = CCMenuItemExt::createToggler(makeSpr(true), makeSpr(false), [this](CCMenuItemToggler* tg) {
                 // the callback runs before the toggler flips
                 Session::get().setEditorMetronome(!tg->isToggled());
+                toast(tg->isToggled() ? "Metronome (BPM) turned off" : "Metronome (BPM) turned on");
             });
             m_metroCheck->setPosition({ fx + 13, fy });
             t.menu->addChild(m_metroCheck);
-            fx += 36;
+            fx += 31;
         }
-        text("Sound");
-        m_soundLabel = stepper("CLASSIC", 26, [this, step, upper](int dir) {
-            setRoundText(m_soundLabel, upper(step("metronome-sound", { "classic", "wood", "click" }, dir)));
-            metronome::click(TickKind::Downbeat); // preview
-        });
-        text("Every");
-        m_ticksLabel = stepper("1/1", 20, [this, step](int dir) {
-            setRoundText(m_ticksLabel, step("metronome-ticks", { "1/1", "1/2", "1/3", "1/4" }, dir));
-        });
-        setRoundText(m_soundLabel, upper(opt::get<std::string>("metronome-sound")));
-        setRoundText(m_ticksLabel, opt::get<std::string>("metronome-ticks"));
+        // a sound that no longer exists (click, deep, drums, clap of older versions) becomes the classic one
+        {
+            static char const* const names[] = { "classic", "wood" };
+            auto cur = opt::get<std::string>("metronome-sound");
+            if (std::find(std::begin(names), std::end(names), cur) == std::end(names))
+                opt::set<std::string>("metronome-sound", "classic");
+        }
+        // two small round buttons: the metronome's sound (a black note + SFX; plays a preview) ...
+        {
+            auto node = CCNode::create();
+            node->setContentSize({ 34, 34 });
+            node->ignoreAnchorPointForPosition(false);
+            node->setAnchorPoint({ .5f, .5f });
+            auto ic = icon("ta_note_black.png"_spr);
+            ic->setScale(19.f / std::max(ic->getContentSize().width, ic->getContentSize().height));
+            ic->setPosition({ 17, 21 });
+            node->addChild(ic);
+            auto lbl = CCLabelBMFont::create("SFX", "bigFont.fnt");
+            lbl->setScale(.32f);
+            lbl->setPosition({ 17, 6 });
+            node->addChild(lbl, 1);
+            auto b = addRound(t, node, CircleBaseColor::Green, { fx + 13, fy }, nullptr, [this, step, upper] {
+                auto name = upper(step("metronome-sound", { "classic", "wood" }, 1));
+                metronome::click(TickKind::Downbeat); // preview
+                toast("Metronome sound: " + name);
+            }, 26.f);
+            (void)b;
+            fx += 31;
+        }
+        // ... and how often it clicks (pink, like the 1/N buttons): 1/1 = every beat, 1/2 ... = also between the beats
+        m_ticksLabel = addRoundText(t, opt::get<std::string>("metronome-ticks").c_str(), CircleBaseColor::Pink,
+                                    { fx + 13, fy }, nullptr, [this, step] {
+            auto v = step("metronome-ticks", { "1/1", "1/2", "1/3", "1/4" }, 1);
+            setRoundText(m_ticksLabel, v);
+            toast(v == "1/1" ? std::string("Metronome clicks on every beat")
+                             : fmt::format("Metronome also clicks {} between the beats", v));
+        }, 26.f);
+        fx += 31;
+
+        // WAVE: the song's waveform behind the level in the editor (the same button as in the editor), right of the
+        // metronome buttons, with its name
+        fx += 2;
+        addSeparator(t, fx, false, fy, { 255, 255, 255, 150 });
+        fx += 10;
+        {
+            auto cap = CCLabelBMFont::create("Editor\nWaveform", "bigFont.fnt");
+            cap->setScale(.34f);
+            cap->setAnchorPoint({ 0, .5f });
+            cap->setColor({ 190, 225, 255 });
+            cap->setPosition({ fx, fy });
+            t.node->addChild(cap);
+            fx += cap->getScaledContentSize().width + 8;
+        }
+        {
+            auto makeSpr = [](bool on) {
+                auto lbl = CCLabelBMFont::create(on ? "WAVE\nON" : "WAVE\nOFF", "bigFont.fnt");
+                lbl->setAlignment(kCCTextAlignmentCenter);
+                lbl->setScale(.38f);
+                auto spr = CircleButtonSprite::create(lbl, on ? CircleBaseColor::Blue : CircleBaseColor::Gray,
+                                                      CircleBaseSize::Small);
+                spr->setScale(26.f / spr->getContentSize().height);
+                return spr;
+            };
+            m_waveCheck = CCMenuItemExt::createToggler(makeSpr(true), makeSpr(false), [this](CCMenuItemToggler* tg) {
+                // the callback runs before the toggler flips
+                Session::get().setEditorWaveform(!tg->isToggled());
+                toast(tg->isToggled() ? "Waveform in the editor turned off" : "Waveform in the editor turned on");
+            });
+            m_waveCheck->setPosition({ fx + 13, fy });
+            t.menu->addChild(m_waveCheck);
+            setCheck(m_waveCheck, Session::get().editorWaveform());
+            fx += 31;
+        }
 
         // row 3, left: where the level's song starts (its Start Offset)
         row(t, 16, YC);
-        text("Song");
+        {
+            // "Song" with "Start" under it: this is where the level's song starts
+            auto l = text("Song\nStart");
+            float before = l->getScaledContentSize().width;
+            l->setScale(.34f);
+            fx -= before - l->getScaledContentSize().width;
+        }
         round("ta_cursor.png"_spr, CircleBaseColor::Green, [this] {
             double ms = m_playing ? playPosition() : m_cursor;
             if (!Session::get().setSongStartOffset(ms)) {
                 Notification::create("Open this from a level (editor or song selection)", NotificationIcon::Error)->show();
                 return;
             }
-            Notification::create(fmt::format("Song start offset = {:.3f} s", std::max(0.0, ms) / 1000.0),
-                NotificationIcon::Success)->show();
+            recordHistory();
+            toast(fmt::format("Song Start set to {:.3f} s", std::max(0.0, ms) / 1000.0));
         });
-        round("ta_to_start.png"_spr, CircleBaseColor::Gray, [] {
+        round("ta_to_start.png"_spr, CircleBaseColor::Gray, [this] {
             if (!Session::get().setSongStartOffset(0)) {
                 Notification::create("Open this from a level (editor or song selection)", NotificationIcon::Error)->show();
                 return;
             }
-            Notification::create("Song starts from the beginning again (offset 0 s)", NotificationIcon::Success)->show();
+            recordHistory();
+            toast("Song Start set to 0 s (the beginning)");
         });
         float songX = fx;
         m_offsetInput = input(56, "sec", CommonFilter::Float);
         m_offsetInput->setCallback([this](std::string const& str) {
             if (m_updatingInputs) return;
-            if (auto v = numFromString<double>(str); v && *v >= 0) Session::get().setSongStartOffset(*v * 1000.0);
+            if (auto v = numFromString<double>(str); v && *v >= 0 && Session::get().setSongStartOffset(*v * 1000.0))
+                recordHistory();
         });
         // "Open this from a level" under the field when there is no level to change
         m_offsetLabel = CCLabelBMFont::create("", "chatFont.fnt");
@@ -691,25 +840,50 @@ bool TimingEditor::init() {
         text("Guidelines");
         round("ta_lines.png"_spr, CircleBaseColor::Green, [this] {
             int n = Session::get().applyGuidelines();
-            Notification::create(n ? fmt::format("Added {} guidelines", n) : std::string("No timing / not in the editor"),
-                n ? NotificationIcon::Success : NotificationIcon::Error)->show();
+            if (n) toast(fmt::format("{} guidelines drawn", n));
+            else Notification::create("No timing / not in the editor", NotificationIcon::Error)->show();
         });
-        round("ta_lines_x.png"_spr, CircleBaseColor::Red, [] {
+        round("ta_lines_x.png"_spr, CircleBaseColor::Red, [this] {
             bool ok = Session::get().clearGuidelines();
-            Notification::create(ok ? "Guidelines removed" : "Not in the editor",
-                ok ? NotificationIcon::Success : NotificationIcon::Error)->show();
+            if (ok) toast("Guidelines removed");
+            else Notification::create("Not in the editor", NotificationIcon::Error)->show();
         });
         // pink 1/N button like the one in the editor
         m_halfLabel = addRoundText(t, "1/1", CircleBaseColor::Pink, { fx + 13, fy }, nullptr, [this] {
             auto& s = Session::get();
-            static int const divs[] = { 1, 2, 3, 4, 6, 8 };
+            static int const divs[] = { 1, 2, 3, 4, 6, 8, 12, 16 };
             int i = 0;
-            while (i < 6 && divs[i] != s.guideDivisor()) i++;
-            int next = divs[(i + 1) % 6];
+            while (i < 8 && divs[i] != s.guideDivisor()) i++;
+            int next = divs[(i + 1) % 8];
             s.setGuideDivisor(next);
+            s.autoGuidelines();
+            recordHistory();
             setRoundText(m_halfLabel, fmt::format("1/{}", next));
+            toast(fmt::format("Guidelines and grid set to 1/{}", next));
         }, 26.f);
         fx += 31;
+        // automatic guidelines: redrawn by themselves after every timing change (checkbox + two-line label)
+        {
+            auto box = CCMenuItemExt::createTogglerWithStandardSprites(.64f, [this](CCMenuItemToggler* tg) {
+                // the callback runs before the toggler flips
+                bool on = !tg->isToggled();
+                opt::set<bool>("auto-guidelines", on);
+                toast(on ? "Automatic guidelines turned on" : "Automatic guidelines turned off");
+                if (on) Session::get().autoGuidelines();
+            });
+            box->setPosition({ fx + 11, fy });
+            t.menu->addChild(box);
+            setCheck(box, opt::get<bool>("auto-guidelines"));
+            auto lbl = CCLabelBMFont::create("Automatic\nGuidelines", "bigFont.fnt");
+            lbl->setScale(.3f);
+            lbl->setAnchorPoint({ 0, .5f });
+            lbl->setColor({ 190, 225, 255 });
+            lbl->setPosition({ fx + 26, fy });
+            t.node->addChild(lbl);
+            fx += 26 + lbl->getScaledContentSize().width + 6;
+        }
+
+
 
         // volume sliders (right), the label above each says which one it is
         auto addVolume = [&](float y, SEL_MenuHandler handler, float value, CCLabelBMFont*& label) {
@@ -723,30 +897,75 @@ bool TimingEditor::init() {
             t.node->addChild(s);
             return s;
         };
-        m_musicSlider = addVolume(87, menu_selector(TimingEditor::onMusicVolume),
+        m_musicSlider = addVolume(91, menu_selector(TimingEditor::onMusicVolume),
             FMODAudioEngine::get()->m_musicVolume, m_musicVolLabel);
-        m_metroSlider = addVolume(60, menu_selector(TimingEditor::onMetronomeVolume),
+        m_metroSlider = addVolume(55, menu_selector(TimingEditor::onMetronomeVolume),
             opt::get<int64_t>("metronome-volume") / 100.f, m_metroVolLabel);
         onMusicVolume(nullptr);
         onMetronomeVolume(nullptr);
+        // playback speed (the pitch stays, the metronome follows it): "Speed" with the value under it and the clock,
+        // in the free place between the first rows and the two sliders. The clock cycles 100% > 75% > 50% > 25%.
+        {
+            float left = 336, y = YA;
+            auto cap = CCLabelBMFont::create("Speed", "bigFont.fnt");
+            cap->setScale(.3f);
+            cap->setAnchorPoint({ 0, .5f });
+            cap->setColor({ 190, 225, 255 });
+            cap->setPosition({ 258, y + 8 });
+            addSeparator(t, 248, false, y, { 255, 255, 255, 150 });
+            t.node->addChild(cap);
+            m_rateLabel = CCLabelBMFont::create("100%", "bigFont.fnt");
+            m_rateLabel->setScale(.34f);
+            m_rateLabel->setAnchorPoint({ 0, .5f });
+            m_rateLabel->setPosition({ 258, y - 8 });
+            m_rateLabel->setString(fmt::format("{}%", (int)std::lround(m_rate * 100)).c_str());
+            t.node->addChild(m_rateLabel);
+            addRound(t, roundIcon("ta_clock.png"_spr, .62f), CircleBaseColor::Blue, { 304, y }, nullptr, [this] {
+                static float const rates[] = { 1.f, .75f, .5f, .25f };
+                int i = 0;
+                while (i < 3 && std::abs(rates[i] - m_rate) > .01f) i++;
+                m_rate = rates[(i + 1) % 4];
+                Mod::get()->setSavedValue<double>("playback-speed", m_rate);
+                m_rateLabel->setString(fmt::format("{}%", (int)std::lround(m_rate * 100)).c_str());
+                applyRate();
+                toast(fmt::format("Playback speed {}%", (int)std::lround(m_rate * 100)));
+            }, 26.f);
+        }
         desc(t,
-            "<cg>Play</c> (<cy>Space</c>) - plays from the yellow cursor. Click the waveform to move\n"
-            "   the cursor (it snaps to the grid, <cy>Alt</c> = free position; the grid is set in <cy>Timing Points</c>).\n"
-            "<cg>Crosshair</c> - shows the cursor.  <cg>Back arrows</c> - back to the start.  <cy>Magnifiers</c> - zoom.\n"
-            "<cg>Metronome</c> - clicks on the beats, here AND in the editor (BPM button).\n"
-            "<cl>Sound</c> - the metronome click.  <cl>Click every</c> - 1/1 = every beat, 1/2 = also between the beats ...\n"
-            "   Use the arrows or click the value.\n"
-            "<cy>Wheel / arrows</c> - next grid line.  <cy>Shift+wheel</c> - scroll.  <cy>Ctrl+wheel</c> - zoom.\n"
-            "Drag the waveform to scroll, drag the strip below it to jump anywhere.\n"
-            "<cy>Song</c> = where the level's song starts (its Start Offset).\n"
-            "<cg>Cursor</c> - the song starts where the yellow cursor is.  <cl>Back arrows</c> - from 0:00 again.\n"
-            "   Or type the start in seconds into the field.\n"
-            "<cy>Guidelines</c> - the beat lines in the editor (osu! colors).\n"
-            "<cg>Lines</c> draws them, starting where the song starts. Old guidelines are replaced.\n"
-            "<cr>Crossed lines</c> deletes them.\n"
-            "<cp>1/N</c> (pink) - 1/N of a beat (also the 1/N button in the editor). Inside a rhythm the lines follow the pattern.\n"
-            "Colors like osu!: white = beat, <cr>red</c> = 1/2, <cp>purple</c> = 1/3, <cl>blue</c> = 1/4, <cy>yellow</c> = 1/8.\n"
-            "Colors, thickness and the editor buttons: <cy>UI Settings</c>.");
+            "<cy>Row 1 - Main</c>\n"
+            "- <cg>Back arrows</c> - go to the start of the song.\n"
+            "- <cg>Play</c> (<cy>Space</c>) - play / pause from the yellow cursor.\n"
+            "- <cg>Forward arrows</c> - go to the end of the song.\n"
+            "- <cg>Green arrow</c> - show the yellow cursor on the waveform.\n"
+            "- <cl>Blue arrow</c> - show the Song Start line (turquoise) on the waveform.\n"
+            "- <cg>Follow</c> (arrow + line) - green: the waveform moves with the music. Gray: it stays where it is.\n"
+            "- <cl>Speed</c> + <cl>clock</c> - play slower: 100% > 75% > 50% > 25%. The pitch stays the same.\n"
+            "<cy>Row 2 - Metronome</c>\n"
+            "- <cg>BPM ON / OFF</c> - the metronome, here and in the editor.\n"
+            "- <cg>SFX</c> (black note) - the sound: classic or wood.\n"
+            "- <cp>1/N</c> (pink) - how often it clicks: 1/1 = every beat, 1/2 = also between the beats, ...\n"
+            "- <cl>WAVE ON / OFF</c> (Editor Waveform) - the song's waveform behind the level in the editor.\n"
+            "<cy>Row 3 - Song Start</c> (where the level's song starts, the turquoise line)\n"
+            "- <cg>Cursor</c> - the song starts at the yellow cursor.\n"
+            "- <cl>Gray back arrows</c> - the song starts at 0:00 again.\n"
+            "- Or type the start in seconds into the field.\n"
+            "<cy>Row 3 - Guidelines</c> (the beat lines in the editor)\n"
+            "- <cg>Lines</c> - draw them (the old ones are replaced).\n"
+            "- <cr>Crossed lines</c> - delete them.\n"
+            "- <cp>1/N</c> (pink) - a line every 1/N of a beat (the same as the 1/N button in the editor).\n"
+            "- <cg>Automatic Guidelines</c> - they are redrawn by themselves after every timing change.\n"
+            "- Colors like osu!: white = beat, <cr>red</c> = 1/2, <cp>purple</c> = 1/3, <cl>blue</c> = 1/4, <cy>yellow</c> = 1/8.\n"
+            "<cy>Sliders</c> (right) - the music and metronome volume.\n"
+            "<cy>Top of the window</c>\n"
+            "- <cg>Undo / Redo</c> (top left, <cy>Ctrl+Z</c> / <cy>Ctrl+Y</c>) - timing, rhythm, Song Start and 1/N.\n"
+            "- <cp>Pink 1/N</c> - the waveform grid (where the cursor snaps).\n"
+            "- <cy>Magnifiers</c> - zoom in / out.\n"
+            "- <cy>Squares</c> (top right) - blink on every beat while the song plays.\n"
+            "<cy>Waveform and mouse</c>\n"
+            "- Click - move the cursor (it snaps to the grid, <cy>Alt</c> = free).\n"
+            "- Drag - scroll. Drag the thin strip under it - jump anywhere.\n"
+            "- <cy>Wheel</c> - next grid line. <cy>Shift + wheel</c> - scroll. <cy>Ctrl + wheel</c> - zoom.\n"
+            "Colors and the editor buttons: the <cy>UI</c> button in the editor's pause menu.");
     }
 
     // ===== 2. Timing points (+ the BPM analysis on the right) =====
@@ -768,15 +987,6 @@ bool TimingEditor::init() {
         fx = 118;
         btn("+ Add", [this] { addPointAtCursor(); }, "GJ_button_01.png");
         btn("Delete", [this] { deletePoint(); }, "GJ_button_06.png");
-        // snap of the cursor / mouse wheel (white = bar, gray = beat, red = 1/2, blue = 1/4)
-        fx += 6;
-        text("Grid");
-        m_divLabel = addArrowText(t, "1/4", { fx + 24 + 6, fy }, nullptr, [this](int dir) {
-            static int const divs[] = { 1, 2, 3, 4, 6, 8, 12, 16 };
-            int i = 0;
-            while (i < 8 && divs[i] != m_divisor) i++;
-            m_divisor = divs[((i + dir) % 8 + 8) % 8];
-        }, 24);
 
         row(t, 16, YB);
         text("Time");
@@ -793,7 +1003,10 @@ bool TimingEditor::init() {
         btn("+1", [this] { shiftPoint(1); });
         btn("+10", [this] { shiftPoint(10); });
         fx += 4;
-        m_allCheck = check("All points", [this](bool on) { m_shiftAll = on; });
+        m_allCheck = check("All points", [this](bool on) {
+            m_shiftAll = on;
+            toast(on ? "Nudge moves all points" : "Nudge moves the selected point");
+        });
 
         row(t, 16, YC);
         text("BPM");
@@ -835,6 +1048,7 @@ bool TimingEditor::init() {
             auto& p = s.map.points[m_selected];
             p.time = std::round(nearestOnset(*s.envelope, p.time, p.beatLength * 0.25));
             changed();
+            toast("Timing point moved to the nearest hit");
         });
         btn("Downbeat here", [this] {
             auto& s = Session::get();
@@ -844,6 +1058,7 @@ bool TimingEditor::init() {
             int shift = (int)(((long long)k % p.meter + p.meter) % p.meter);
             p.time += shift * p.beatLength;
             changed();
+            toast("The beat at the cursor is now beat 1 of the bar");
         });
         btn("Clear all points", [this] {
             createQuickPopup("Clear", "Delete <cr>all</c> timing points?", "Cancel", "Delete", [this](auto, bool yes) {
@@ -887,29 +1102,32 @@ bool TimingEditor::init() {
             if (auto v = numFromString<double>(s); v && *v <= 400) saveSetting("max-bpm", *v);
         });
         row(t, RX, YC);
-        m_changesCheck = check("Tempo changes", [this](bool on) { saveSetting("detect-changes", on); });
-        row(t, RX, YD);
-        btn("Undo", [this] { undo(); });
-        btn("Redo", [this] { redo(); });
+        m_changesCheck = check("Tempo changes", [this](bool on) {
+            saveSetting("detect-changes", on);
+            toast(on ? "Tempo changes turned on" : "Tempo changes turned off");
+        });
         desc(t,
-            "<cr>Red markers</c> = timing points (like uninherited points in osu!). Each one sets\n"
-            "   BPM + beats per bar from its time on. Click a marker to select it, drag to\n"
-            "   move it (hold <cy>Shift</c> to snap to the nearest hit).\n"
-            "<cg>+ Add</c> (<cy>A</c>) - new point at the cursor.  <cr>Delete</c> (<cy>Del</c>) - removes the selected point.\n"
-            "<cl>Grid</c> - snap of the cursor and the mouse wheel: white = bar, gray = beat, red = 1/2, blue = 1/4.\n"
-            "<co>-10 / -1 / +1 / +10</c> - nudge the point by ms (<cl>All points</c> = move the whole timing).\n"
-            "<co>x2 /2 x1.5 /1.5</c> - multiply the BPM.  <cl>Meter</c> = beats per bar.\n"
-            "<cl>Snap to hit</c> - moves the point onto the closest hit.\n"
-            "<cl>Downbeat here</c> - the beat at the cursor becomes beat 1 of the bar.\n"
-            "<cy>Undo / Redo</c> - Ctrl+Z / Ctrl+Y.\n"
-            "<cy>Finding the BPM</c>\n"
-            "<cg>Analyze!</c> - listens to the song and finds the BPM, tempo changes and where the beat starts.\n"
-            "   It <cr>replaces</c> the current timing points - fine-tune them afterwards if needed.\n"
-            "<cl>Tap</c> (<cy>T</c>) - tap along with the music by hand, after 4+ taps the selected point gets the tapped BPM.\n"
-            "<cl>Min / Max</c> - the BPM search range. If the result is half or double the real tempo, narrow it (or use x2 / /2).\n"
-            "<cl>Tempo changes</c> on - adds a timing point wherever the tempo drifts (live drummers, old recordings).\n"
-            "<cl>Tempo changes</c> off - one constant BPM for the whole song (most electronic / studio tracks).\n"
-            "The <co>orange line</c> at the bottom of the waveform shows the hits - beat lines should sit on its peaks.");
+            "<cr>Red lines</c> on the waveform are timing points. Each one sets the BPM and the beats per bar from its time on.\n"
+            "<cy>Quick start</c>\n"
+            "1. Load the song (Files tab).\n"
+            "2. Press <cg>Analyze!</c>.\n"
+            "3. Play it: the beat lines should sit on the peaks of the <co>orange line</c>. Fix the points if they don't.\n"
+            "<cy>Left - the selected point</c>\n"
+            "- <cy>Point 1/3</c> + arrows - choose a point. Or click its red line (drag to move it, <cy>Shift</c> = onto the nearest hit).\n"
+            "- <cg>+ Add</c> (<cy>A</c>) - a new point at the cursor. <cr>Delete</c> (<cy>Del</c>) - remove the selected one.\n"
+            "- <cl>Time</c> - its time in ms. <co>-10 / -1 / +1 / +10</c> nudge it.\n"
+            "- <cl>All points</c> - the nudge moves the whole timing.\n"
+            "- <cl>BPM</c> - its BPM. <co>x2 / /2 / x1.5 / /1.5</c> multiply it.\n"
+            "- <cl>Meter</c> - beats per bar.\n"
+            "- <cl>Snap to hit</c> - moves the point onto the closest hit.\n"
+            "- <cl>Downbeat here</c> - the beat at the cursor becomes beat 1 of the bar.\n"
+            "- <cr>Clear all points</c> - deletes every timing point.\n"
+            "<cy>Right - finding the BPM</c>\n"
+            "- <cg>Analyze!</c> - finds the BPM, tempo changes and the first beat. It <cr>replaces</c> the timing points.\n"
+            "- <cl>Tap</c> (<cy>T</c>) - tap along with the music. After 4 taps the selected point gets that BPM.\n"
+            "- <cl>Min / Max</c> - the BPM range. Is the result half or double? Narrow it, or use x2 / /2.\n"
+            "- <cl>Tempo changes</c> - on: adds points where the tempo drifts (live drums). Off: one BPM for the whole song.\n"
+            "<cy>Undo / Redo</c>: top left (<cy>Ctrl+Z</c> / <cy>Ctrl+Y</c>).");
     }
 
     // ===== 2b. Rhythm patterns =====
@@ -968,6 +1186,26 @@ bool TimingEditor::init() {
             changed();
         }, 30);
 
+        // snapping of the rhythm points (dragging and + New) to the waveform grid
+        row(t, 16, YB);
+        m_rhythmSnapCheck = check("Snap to grid", [this](bool on) {
+            saveSetting("rhythm-snap", on);
+            toast(on ? "Rhythm snap to grid turned on" : "Rhythm snap to grid turned off");
+        });
+        // every square of the shown bar off at once (then click only the hits you want)
+        addPill(t.menu, "Clear bar", nullptr, "GJ_button_06.png", { 178, YB }, 76, 18, [this] {
+            auto& s = Session::get();
+            if (m_rhythmSel < 0 || m_rhythmSel >= (int)s.map.rhythm.size()) return;
+            int meter = rhythmMeter(m_rhythmSel);
+            int beat = 0;
+            for (auto& step : s.map.rhythm[m_rhythmSel].beats) {
+                int inBar = beat - m_rhythmPage * meter;
+                if (inBar >= 0 && inBar < meter) step.hits = step.accents = 0;
+                beat += std::max(1, step.span);
+            }
+            changed();
+        }, false, nullptr, .34f);
+
         // which bar of a longer pattern is shown below
         addArrow(t, { 380, YB }, -1, [this] {
             if (m_rhythmPage > 0) m_rhythmPage--;
@@ -996,16 +1234,30 @@ bool TimingEditor::init() {
         m_rhythmGrid = CCMenu::create();
         m_rhythmGrid->setPosition({ 0, 0 });
         t.node->addChild(m_rhythmGrid);
-        addHelp(t,
-            "A rhythm point plays its own <cp>pattern</c> instead of the regular grid.\n"
-            "<cg>+ New</c> - new pattern at the cursor.  <cl>Normal grid</c> - back to the regular grid from here.\n"
-            "<cr>Trash</c> (<cy>Del</c>) - deletes the selected rhythm point.\n"
-            "<cl>From (note)</c> - fills the pattern from the hits in the song.\n"
-            "<cl>1 bar</c> - bars in the pattern.  <cl>Loop</c> - repeats (all = until the next point).\n"
-            "<cp>Beats</c>: the value above a beat is its snap (1/1 ... 1/8), change it with the arrows.\n"
-            "Squares: click = off / <cp>purple</c> (quiet) / <cp>pink</c> (loud).\n"
-            "<cr>-</c> merges a beat with the one before, <cg>+</c> splits it again.\n"
-            "<co>Note:</c> inside a rhythm the 1/N guidelines and metronome Ticks follow the pattern.");
+        desc(t,
+            "A <cp>rhythm pattern</c> plays its own rhythm inside one BPM (for example 1/4, then fast 1/6), with no extra timing points.\n"
+            "<cy>Quick start</c>\n"
+            "1. Put the yellow cursor where the rhythm starts.\n"
+            "2. Press <cg>+ New</c>.\n"
+            "3. Set the snap of each beat and click the squares you want.\n"
+            "<cy>Row 1</c>\n"
+            "- <cy>Rhythm 1/2</c> + arrows - choose a rhythm point. Or click its purple line on the waveform (drag to move it).\n"
+            "- <cg>+ New</c> - a new pattern at the cursor.\n"
+            "- <cl>Normal grid</c> - back to the normal grid from the cursor on.\n"
+            "- <cr>Trash</c> (<cy>Del</c>) - deletes the selected rhythm point.\n"
+            "- <cl>From</c> (note) - fills the pattern from the hits in the song. Check it by ear.\n"
+            "- <cl>1 BAR</c> - the length of the pattern: 1, 2 or 4 bars.\n"
+            "- <cl>LOOP ALL</c> - how many times it repeats (ALL = until the next rhythm point or BPM change).\n"
+            "<cy>Row 2</c>\n"
+            "- <cl>Snap to grid</c> - rhythm points jump to the waveform grid. Off = they move freely (on: hold <cy>Alt</c> for free).\n"
+            "- <cr>Clear bar</c> - turns off every square of the shown bar.\n"
+            "- <cy>Bar 1/2</c> + arrows - which bar of a longer pattern is shown.\n"
+            "<cy>Beats</c> (one column per beat)\n"
+            "- <cy>1/4</c> above a beat - its snap (1/1 ... 1/16). Use the arrows or click it.\n"
+            "- Squares - click: gray (nothing) > <cp>purple</c> (quiet hit) > <cp>pink</c> (loud hit).\n"
+            "- <cr>X</c> - no hits on this beat.\n"
+            "- <cr>-</c> - joins the beat with the one before (one long beat). <cg>+</c> - splits it again.\n"
+            "Inside a pattern the metronome and the guidelines follow the pattern, not the 1/N buttons.");
     }
 
     // ===== 4. Files (song, osu! timing, level backup) =====
@@ -1068,8 +1320,10 @@ bool TimingEditor::init() {
             if (m_minBpmInput) m_minBpmInput->setString(fmt::format("{:.0f}", savedDouble("min-bpm", 70)));
             if (m_maxBpmInput) m_maxBpmInput->setString(fmt::format("{:.0f}", savedDouble("max-bpm", 230)));
             setCheck(m_changesCheck, savedBool("detect-changes", true));
+            setCheck(m_rhythmSnapCheck, savedBool("rhythm-snap", true));
             setRoundText(m_halfLabel, fmt::format("1/{}", Session::get().guideDivisor()));
             setCheck(m_metroCheck, Session::get().editorMetronome());
+            setCheck(m_waveCheck, Session::get().editorWaveform());
             refreshPanel();
             Notification::create("Level settings imported", NotificationIcon::Success)->show();
         }, "GJ_button_01.png");
@@ -1100,24 +1354,210 @@ bool TimingEditor::init() {
         }, "GJ_button_06.png");
         desc(t,
             "<cy>Song file</c>\n"
-            "<cg>Load audio file...</c> - mp3 / ogg / wav / flac (or drag it onto the game). Its waveform shows here.\n"
-            "<cg>Load level's song</c> - loads the level's own song (also a Jukebox NONG).\n"
+            "- <cg>Load audio file...</c> - mp3 / ogg / wav / flac. Or drag the file onto the game window.\n"
+            "- <cg>Load level's song</c> - the level's own song (a Jukebox NONG too).\n"
             "<cy>In the level</c>\n"
-            "<cg>Use as level song</c> - the level plays the loaded file instead of its song (only on your PC).\n"
-            "<cr>Restore original song</c> - puts the original song back.\n"
+            "- <cg>Use as level song</c> - the level plays the loaded file (only on your PC).\n"
+            "- <cr>Restore original song</c> - the original song again.\n"
             "<cy>osu! timing</c>\n"
-            "<cg>Import from .osu</c> - copies the timing points from an osu! beatmap (.osu file).\n"
-            "<cl>Export to .osu</c> - saves your timing as an osu! [TimingPoints] section.\n"
-            "<cy>Level backup (.json file)</c>\n"
-            "<cg>Import backup</c> - loads a file saved with Export backup (e.g. on another PC).\n"
-            "<cl>Export backup</c> - saves this level's timing, settings and song start to one file.\n"
-            "<cr>Unload everything</c> - removes the song, the waveform and every timing point (also the saved ones).\n"
-            "Tip: drag an audio or .osu file onto the game window to load it.");
+            "- <cg>Import from .osu</c> - takes the timing from an osu! beatmap. Dragging a .osu file onto the game works too.\n"
+            "- <cl>Export to .osu</c> - saves your timing as an osu! [TimingPoints] section.\n"
+            "<cy>Level backup</c> (.json file)\n"
+            "- <cg>Import backup</c> - loads a backup (for example from another PC).\n"
+            "- <cl>Export backup</c> - saves this level's timing, rhythm, settings and Song Start.\n"
+            "<cr>Unload everything</c> - removes the song, the waveform and all timing points of this level (the saved ones too).");
+    }
+
+    // ===== 5. Triggers (pulses / spawns on the beats, put into the level editor) =====
+    // added last: the tab index is part of the saved "last-tab" and the Move UI ids
+    {
+        m_triggerTab = (int)m_tabs.size();
+        auto& t = addTab("Triggers", 0, "ta_pulse.png"_spr);
+        float const YA = 94, YB = 70, YC = 46, YD = 22;
+        loadTriggerSettings();
+        auto stepper = [&](char const* value, float half, geode::Function<void(int)> cb) {
+            auto l = addArrowText(t, value, { fx + half + 6, fy }, nullptr, std::move(cb), half);
+            fx += half * 2 + 20;
+            return l;
+        };
+        auto cursorBtn = [&](geode::Function<void()> cb) {
+            auto b = addRound(t, roundIcon("ta_cursor.png"_spr, .62f), CircleBaseColor::Green, { fx + 11, fy }, nullptr,
+                              std::move(cb), 22.f);
+            fx += 27;
+            return b;
+        };
+        // everything built inside `build` is shown only for one kind of trigger
+        auto only = [&](std::vector<CCNode*>& into, auto&& build) {
+            unsigned n0 = t.node->getChildrenCount(), m0 = t.menu->getChildrenCount();
+            build();
+            for (unsigned i = n0; i < t.node->getChildrenCount(); i++)
+                into.push_back(static_cast<CCNode*>(t.node->getChildren()->objectAtIndex(i)));
+            for (unsigned i = m0; i < t.menu->getChildrenCount(); i++)
+                into.push_back(static_cast<CCNode*>(t.menu->getChildren()->objectAtIndex(i)));
+        };
+        auto fmtSec = [](double ms) { return ms < 0 ? std::string() : fmt::format("{:.3f}", ms / 1000.0); };
+        // the squares of the steps and the palette
+        m_trigMenu = CCMenu::create();
+        m_trigMenu->setPosition({ 0, 0 });
+        t.node->addChild(m_trigMenu);
+
+        // row 1: what (the picture of the trigger), how and how often
+        row(t, 16, YA);
+        text("Make");
+        {
+            // pulse > spawn > color
+            auto flip = [this](int dir) {
+                m_trig.kind = (triggers::Kind)((((int)m_trig.kind + dir) % 3 + 3) % 3);
+                saveTriggerSettings();
+                refreshTriggerTab();
+            };
+            float x0 = fx;
+            addArrow(t, { x0 + 8, fy }, -1, [flip] { flip(-1); });
+            m_trigKindIcon = CCSprite::create();
+            m_trigKindIcon->setPosition({ x0 + 30, fy });
+            t.node->addChild(m_trigKindIcon);
+            addArrow(t, { x0 + 52, fy }, 1, [flip] { flip(1); });
+            fx = x0 + 66;
+        }
+        text("As");
+        m_trigPlaceLabel = stepper("ON BEATS", 40, [this](int) {
+            m_trig.placement = m_trig.placement == triggers::Placement::OnBeats ? triggers::Placement::Loop
+                                                                              : triggers::Placement::OnBeats;
+            saveTriggerSettings();
+            refreshTriggerTab();
+        });
+        text("Every");
+        m_trigEveryLabel = stepper("1/1", 22, [this](int dir) {
+            m_trig.every = ((m_trig.every + dir) % triggers::kEveryCount + triggers::kEveryCount) % triggers::kEveryCount;
+            saveTriggerSettings();
+            refreshTriggerTab();
+        });
+
+        // row 2: which part of the song
+        row(t, 16, YB);
+        text("Start");
+        m_trigFromInput = input(54, "start", CommonFilter::Float);
+        m_trigFromInput->setString(fmtSec(m_trig.fromMs));
+        m_trigFromInput->setCallback([this](std::string const& str) {
+            if (m_updatingInputs) return;
+            auto v = numFromString<double>(str);
+            m_trig.fromMs = v && *v >= 0 ? *v * 1000.0 : -1;
+            saveTriggerSettings();
+            m_trigTimesAt = -10;
+        });
+        cursorBtn([this] {
+            m_trig.fromMs = std::max(0.0, m_playing ? playPosition() : m_cursor);
+            saveTriggerSettings();
+            refreshTriggerTab();
+            toast(fmt::format("Triggers start at {}", fmtTime(m_trig.fromMs)));
+        });
+        text("End");
+        m_trigToInput = input(54, "end", CommonFilter::Float);
+        m_trigToInput->setString(fmtSec(m_trig.toMs));
+        m_trigToInput->setCallback([this](std::string const& str) {
+            if (m_updatingInputs) return;
+            auto v = numFromString<double>(str);
+            m_trig.toMs = v && *v >= 0 ? *v * 1000.0 : -1;
+            saveTriggerSettings();
+            m_trigTimesAt = -10;
+        });
+        cursorBtn([this] {
+            m_trig.toMs = std::max(0.0, m_playing ? playPosition() : m_cursor);
+            saveTriggerSettings();
+            refreshTriggerTab();
+            toast(fmt::format("Triggers end at {}", fmtTime(m_trig.toMs)));
+        });
+
+        // row 3: how many steps the cycle has and the steps themselves (click one to edit it below)
+        row(t, 16, YC);
+        text("Steps");
+        m_trigStepsLabel = stepper("1", 20, [this](int dir) {
+            m_trig.steps = ((m_trig.steps - 1 + dir) % triggers::kMaxSteps + triggers::kMaxSteps) % triggers::kMaxSteps + 1;
+            m_trigSel = std::min(m_trigSel, m_trig.steps - 1);
+            saveTriggerSettings();
+            refreshTriggerTab();
+        });
+        m_trigStepsX = fx + 2;
+
+        // row 4: the selected step. Pulse: its color (and what the pulses flash). Spawn: the groups it spawns.
+        row(t, 16, YD);
+        only(m_pulseOnly, [&] {
+            text("Color");
+            m_trigPalX = fx + 2;
+            fx = m_trigPalX + 100;
+            text("On");
+            m_trigTargetLabel = stepper("BG", 26, [this](int dir) {
+                int n = triggers::targetCount();
+                m_trig.target = ((m_trig.target + dir) % n + n) % n;
+                saveTriggerSettings();
+                refreshTriggerTab();
+            });
+        });
+        only(m_spawnOnly, [&] {
+            fx = 16; // the same row again (the pulse part moved fx)
+            text("Groups");
+            m_trigGroupsInput = input(110, "1,5", CommonFilter::Any);
+            m_trigGroupsInput->setMaxCharCount(24);
+            m_trigGroupsInput->setCallback([this](std::string const& str) {
+                if (m_updatingInputs) return;
+                m_trig.step[std::clamp(m_trigSel, 0, triggers::kMaxSteps - 1)].groups = str;
+                saveTriggerSettings();
+                m_trigDirty = true;
+            });
+            auto hint = CCLabelBMFont::create("spawned together: 1,5,12", "chatFont.fnt");
+            hint->setScale(.42f);
+            hint->setAnchorPoint({ 0, .5f });
+            hint->setColor({ 200, 200, 200 });
+            hint->setPosition({ fx, fy });
+            t.node->addChild(hint);
+        });
+
+        // right: a ready cycle to start from, how many + the button that puts them into the level
+        addPill(t.menu, "Preset", nullptr, "GJ_button_04.png", { 466, 88 }, 112, 20, [this] {
+            m_trigPreset = (m_trigPreset + 1) % triggers::presetCount();
+            triggers::applyPreset(m_trig, m_trigPreset);
+            m_trigSel = 0;
+            saveTriggerSettings();
+            refreshTriggerTab();
+        }, false, &m_trigPresetLabel, .3f);
+        m_trigCountLabel = CCLabelBMFont::create("", "bigFont.fnt");
+        m_trigCountLabel->setScale(.34f);
+        m_trigCountLabel->setPosition({ 466, 58 });
+        t.node->addChild(m_trigCountLabel);
+        addPill(t.menu, "Place triggers", "ta_pulse.png"_spr, "GJ_button_01.png", { 466, 25 }, 112, 26,
+                [this] { placeTriggers(); }, false, nullptr, .36f);
+
+        desc(t,
+            "Puts <cy>triggers</c> into your level, exactly on the beats.\n"
+            "<cy>Quick start</c>\n"
+            "1. Choose what to make and how often (row 1).\n"
+            "2. Pick a <cl>Preset</c> or set the steps yourself.\n"
+            "3. Scroll the editor to the height you want and press <cg>Place triggers</c>.\n"
+            "<cy>Row 1</c>\n"
+            "- <cl>Make</c> - a <cy>pulse</c>, <cy>spawn</c> or <cy>color</c> trigger (color = a color change right away, no fade).\n"
+            "- <cl>As</c> - <cy>ON BEATS</c>: one trigger on every beat. <cy>SPAWN LOOP</c>: one loop that repeats itself (fewer objects), with a stop trigger at the end.\n"
+            "- <cl>Every</c> - <cy>BAR</c>, <cy>1/1</c> (every beat) ... <cy>1/8</c>, or <cy>HITS</c> (the hits in the song). Rhythm patterns are followed.\n"
+            "<cy>Row 2</c>\n"
+            "- <cl>Start / End</c> - the part of the song, in seconds. The <cg>cursor</c> button takes the yellow cursor.\n"
+            "- Empty = from the start / to the end. The part is green on the waveform.\n"
+            "<cy>Row 3 - Steps</c>\n"
+            "- The squares are what the triggers do one after another, then again from the first one.\n"
+            "- Example: 1/4 with two steps, pink and blue = pink, blue, pink, blue ...\n"
+            "- The arrows set how many steps (1 - 8). Click a square to edit it in row 4.\n"
+            "<cy>Row 4 - the selected step</c>\n"
+            "- Pulse / color: <cl>Color</c> - the swatch opens the color picker. <cg>+</c> = brighten the channel's own color. <cr>X</c> = nothing on this step.\n"
+            "- <cl>On</c> - what changes color: BG, GROUND, OBJECTS or LINE.\n"
+            "- Spawn: <cl>Groups</c> - the groups it spawns (\"1,5,12\"). Empty = nothing.\n"
+            "<cy>Right</c>\n"
+            "- <cl>Preset</c> - ready steps: every beat, two colors, alternate, accent, rainbow.\n"
+            "- The text above the button - how many triggers will be placed.\n"
+            "- <cg>Place triggers</c> - puts them at the editor's current height. <cy>One Ctrl+Z</c> removes them all.");
     }
 
     setCheck(m_metroCheck, Session::get().editorMetronome());
     setCheck(m_allCheck, m_shiftAll);
     setCheck(m_changesCheck, savedBool("detect-changes", true));
+    setCheck(m_rhythmSnapCheck, savedBool("rhythm-snap", true));
     setRoundText(m_halfLabel, fmt::format("1/{}", Session::get().guideDivisor()));
 
     // "Level: ... / osu! timing: ..." on the right of the Song line (text set in refreshPanel())
@@ -1128,7 +1568,7 @@ bool TimingEditor::init() {
     m_osuLabel->setPosition({ POP_W - 16, POP_H - 33 });
     m_mainLayer->addChild(m_osuLabel);
 
-    // help of the current tab
+    // help of the current tab (top bar: down in the corner it covered the Unload / Place buttons)
     {
         auto spr = CCSprite::createWithSpriteFrameName("GJ_infoIcon_001.png");
         spr->setScale(.6f);
@@ -1136,18 +1576,56 @@ bool TimingEditor::init() {
             if (m_tab >= 0 && m_tab < (int)m_tabs.size() && !m_tabs[m_tab].help.empty())
                 MDPopup::create(fmt::format("Help - {}", m_tabs[m_tab].label->getString()), m_tabs[m_tab].help, "OK")->show();
         });
-        btn->setPosition({ POP_W - 16, 15 });
+        btn->setPosition({ 455, POP_H - 15 }); // in the top bar, between the magnifiers and the beat squares
         m_menu->addChild(btn);
         m_helpBtn = btn;
     }
-    // live editor preview (buttons / text / guideline colors), only when a level is open: closes this window
-    if (LevelEditorLayer::get() && !m_tabs.empty()) {
-        auto btn = addPill(m_menu, "UI Settings", nullptr, "GJ_button_05.png", { 0, kTabY }, 0, kTabH, [this] {
-            this->onClose(nullptr);
-            LayoutPopup::open(0, false);
+    // undo / redo of everything done in the window (timing, rhythm, song start, 1/N), next to the close button
+    {
+        auto hist = [&](char const* iconName, float x, geode::Function<void()> cb) {
+            auto spr = CircleButtonSprite::create(roundIcon(iconName, .62f), CircleBaseColor::Green, CircleBaseSize::Small);
+            spr->setScale(22.f / spr->getContentSize().height);
+            auto b = CCMenuItemExt::createSpriteExtra(spr, [cb = std::move(cb)](auto) mutable { cb(); });
+            b->setPosition({ x, POP_H - 15 });
+            m_menu->addChild(b);
+        };
+        hist("ta_undo.png"_spr, 42, [this] { undo(); });
+        hist("ta_redo.png"_spr, 68, [this] { redo(); });
+        // zoom of the waveform (also Ctrl + wheel), right of the title
+        auto zoomBtn = [&](char const* name, float x, geode::Function<void()> cb) {
+            auto spr = CCSprite::create(name);
+            spr->setScale(24.f / spr->getContentSize().height);
+            auto b = CCMenuItemExt::createSpriteExtra(spr, [cb = std::move(cb)](auto) mutable { cb(); });
+            b->setPosition({ x, POP_H - 15 });
+            m_menu->addChild(b);
+        };
+        // the waveform grid: how many lines per beat the waveform shows and the cursor / rhythm points snap to
+        {
+            m_divisor = std::clamp(Mod::get()->getSavedValue<int>("wave-grid", 4), 1, 16);
+            m_divLabel = CCLabelBMFont::create(fmt::format("1/{}", m_divisor).c_str(), "bigFont.fnt");
+            m_divLabel->setScale(.45f);
+            auto spr = CircleButtonSprite::create(m_divLabel, CircleBaseColor::Pink, CircleBaseSize::Small);
+            spr->setScale(24.f / spr->getContentSize().height);
+            auto b = CCMenuItemExt::createSpriteExtra(spr, [this](auto) {
+                static int const divs[] = { 1, 2, 3, 4, 6, 8, 12, 16 };
+                int i = 0;
+                while (i < 7 && divs[i] != m_divisor) i++;
+                m_divisor = divs[(i + 1) % 8];
+                Mod::get()->setSavedValue<int>("wave-grid", m_divisor);
+                m_divLabel->setString(fmt::format("1/{}", m_divisor).c_str());
+                toast(fmt::format("Waveform grid 1/{}", m_divisor));
+            });
+            b->setPosition({ 372, POP_H - 15 });
+            m_menu->addChild(b);
+        }
+        zoomBtn("ta_zoom_out.png"_spr, 399, [this] {
+            zoom(1.5, m_viewStart + WW * m_msPerPx / 2);
+            toast("Zoomed out");
         });
-        btn->setPositionX(WX + WW - btn->getScaledContentSize().width / 2);
-        m_settingsBtn = btn;
+        zoomBtn("ta_zoom_in.png"_spr, 426, [this] {
+            zoom(1 / 1.5, m_viewStart + WW * m_msPerPx / 2);
+            toast("Zoomed in");
+        });
     }
     layoutTabs();
     switchTab(Mod::get()->getSavedValue<int>("last-tab", 0));
@@ -1176,6 +1654,7 @@ void TimingEditor::onClose(CCObject* sender) {
     }
     stopPlayback();
     Session::get().save();
+    (void)Mod::get()->saveData();
     s_current = nullptr;
     Popup::onClose(sender);
 }
@@ -1231,7 +1710,7 @@ void TimingEditor::addRhythmPoint(bool normal) {
         Notification::create("Add a timing point (BPM) first", NotificationIcon::Error)->show();
         return;
     }
-    double t = s.map.snap(m_cursor, 1);
+    double t = savedBool("rhythm-snap", true) ? s.map.snap(m_cursor, m_divisor) : m_cursor;
     int found = -1;
     for (int i = 0; i < (int)s.map.rhythm.size(); i++)
         if (std::abs(s.map.rhythm[i].time - t) < 1) found = i;
@@ -1251,6 +1730,7 @@ void TimingEditor::addRhythmPoint(bool normal) {
     m_rhythmSel = found;
     m_rhythmPage = 0;
     changed();
+    toast(normal ? "Normal grid from here" : "Rhythm pattern added");
     switchTab(m_rhythmTab);
 }
 
@@ -1260,6 +1740,7 @@ void TimingEditor::deleteRhythmPoint() {
     s.map.rhythm.erase(s.map.rhythm.begin() + m_rhythmSel);
     if (m_rhythmSel >= (int)s.map.rhythm.size()) m_rhythmSel = (int)s.map.rhythm.size() - 1;
     changed();
+    toast("Rhythm point deleted");
 }
 
 void TimingEditor::setRhythmBars(int bars) {
@@ -1387,10 +1868,8 @@ void TimingEditor::rebuildRhythmGrid() {
             auto& s = Session::get();
             if (m_rhythmSel < 0 || m_rhythmSel >= (int)s.map.rhythm.size()) return;
             auto& step = s.map.rhythm[m_rhythmSel].beats[bi];
-            static int const divs[] = { 1, 2, 3, 4, 6, 8 };
-            int i = 0;
-            while (i < 6 && divs[i] != step.divisor) i++;
-            int nd = divs[((i + dir) % 6 + 6) % 6];
+            // every number of parts 1 ... 16, odd ones too (1/5, 1/7 ...)
+            int nd = ((std::clamp(step.divisor, 1, 16) - 1 + dir) % 16 + 16) % 16 + 1;
             // a new snap starts with every part playing (click squares to remove hits)
             step.divisor = nd;
             step.hits = (1u << nd) - 1;
@@ -1425,6 +1904,15 @@ void TimingEditor::rebuildRhythmGrid() {
                 steps.insert(steps.begin() + bi + 1, RhythmBeat{});
                 changed();
             }, "GJ_button_01.png");
+        // "X" = this beat without any hit (the "+" of a stretched beat is in the way, so it goes one place further)
+        if (colW * span >= 100)
+            addButton(m_rhythmGrid, "X", { cx + (span > 1 ? 62.f : 40.f), 46 }, [this, bi] {
+                auto& s = Session::get();
+                if (m_rhythmSel < 0 || m_rhythmSel >= (int)s.map.rhythm.size()) return;
+                auto& step = s.map.rhythm[m_rhythmSel].beats[bi];
+                step.hits = step.accents = 0;
+                changed();
+            }, "GJ_button_06.png");
         float cw = w / b.divisor;
         for (int j = 0; j < b.divisor; j++) {
             bool on = b.hits & (1u << j), accent = b.accents & (1u << j);
@@ -1459,10 +1947,34 @@ static std::string historyKeyNow() {
     return utils::string::pathToString(s.audioPath) + "|" + Session::levelKey();
 }
 
+std::string TimingEditor::Snapshot::key() const {
+    return map.serialize() + fmt::format("|{:.4f}|{}", songOffset, guideDivisor);
+}
+
+TimingEditor::Snapshot TimingEditor::snapshot() const {
+    auto& s = Session::get();
+    Snapshot snap;
+    snap.map = s.map;
+    if (auto ls = Session::levelSettings()) snap.songOffset = ls->m_songOffset;
+    snap.guideDivisor = s.guideDivisor();
+    return snap;
+}
+
+void TimingEditor::restore(Snapshot const& snap) {
+    auto& s = Session::get();
+    s.map = snap.map;
+    if (auto ls = Session::levelSettings(); ls && snap.songOffset >= 0 && std::abs(ls->m_songOffset - snap.songOffset) > 1e-4)
+        s.setSongStartOffset(snap.songOffset * 1000.0);
+    if (snap.guideDivisor != s.guideDivisor()) {
+        s.setGuideDivisor(snap.guideDivisor);
+        setRoundText(m_halfLabel, fmt::format("1/{}", snap.guideDivisor));
+    }
+}
+
 void TimingEditor::resetHistory() {
     m_undo.clear();
     m_redo.clear();
-    m_lastMap = Session::get().map;
+    m_lastMap = snapshot();
     m_historyKey = historyKeyNow();
 }
 
@@ -1470,17 +1982,20 @@ void TimingEditor::recordHistory() {
     auto& s = Session::get();
     // another song / level -> its own history
     if (m_historyKey != historyKeyNow()) return resetHistory();
-    if (s.map.serialize() == m_lastMap.serialize()) return;
+    auto now = snapshot();
+    if (now.key() == m_lastMap.key()) return;
     // typing a value or clicking +1 several times in a row is one step (adding / deleting never merges)
+    auto const& last = m_lastMap.map;
     bool merge = m_clock - m_lastRecord < 0.6 && !m_undo.empty() &&
-                 m_lastMap.points.size() == s.map.points.size() && m_undo.back().points.size() == s.map.points.size() &&
-                 m_lastMap.rhythm.size() == s.map.rhythm.size() && m_undo.back().rhythm.size() == s.map.rhythm.size();
+                 last.points.size() == s.map.points.size() && m_undo.back().map.points.size() == s.map.points.size() &&
+                 last.rhythm.size() == s.map.rhythm.size() && m_undo.back().map.rhythm.size() == s.map.rhythm.size() &&
+                 m_lastMap.guideDivisor == now.guideDivisor;
     if (!merge) {
         m_undo.push_back(m_lastMap);
         if (m_undo.size() > 200) m_undo.erase(m_undo.begin());
     }
     m_redo.clear();
-    m_lastMap = s.map;
+    m_lastMap = std::move(now);
     m_lastRecord = m_clock;
 }
 
@@ -1491,10 +2006,11 @@ void TimingEditor::undo() {
         Notification::create("Nothing to undo", NotificationIcon::Info)->show();
         return;
     }
-    m_redo.push_back(s.map);
-    s.map = m_undo.back();
+    m_redo.push_back(snapshot());
+    restore(m_undo.back());
     m_undo.pop_back();
-    m_lastMap = s.map;
+    toast("Undone");
+    m_lastMap = snapshot();
     m_lastRecord = -10;
     if (m_selected >= (int)s.map.points.size()) m_selected = (int)s.map.points.size() - 1;
     if (m_selected < 0 && !s.map.empty()) m_selected = 0;
@@ -1509,10 +2025,11 @@ void TimingEditor::redo() {
         Notification::create("Nothing to redo", NotificationIcon::Info)->show();
         return;
     }
-    m_undo.push_back(s.map);
-    s.map = m_redo.back();
+    m_undo.push_back(snapshot());
+    restore(m_redo.back());
     m_redo.pop_back();
-    m_lastMap = s.map;
+    toast("Redone");
+    m_lastMap = snapshot();
     m_lastRecord = -10;
     if (m_selected >= (int)s.map.points.size()) m_selected = (int)s.map.points.size() - 1;
     if (m_selected < 0 && !s.map.empty()) m_selected = 0;
@@ -1612,6 +2129,251 @@ void TimingEditor::refreshPanel() {
         }
     }
     // the grid itself is rebuilt from update() (its buttons call this, they must not delete themselves)
+}
+
+// ---------------- triggers tab ----------------
+
+// per level: color channels and groups belong to one level
+void TimingEditor::loadTriggerSettings() {
+    auto& t = m_trig;
+    auto& s = Session::get();
+    t.kind = (triggers::Kind)std::clamp((int)savedDouble("trig-kind", 0), 0, 2);
+    t.placement = savedDouble("trig-loop", 0) == 1 ? triggers::Placement::Loop : triggers::Placement::OnBeats;
+    t.every = std::clamp((int)savedDouble("trig-every", 1), 0, triggers::kEveryCount - 1);
+    t.fromMs = savedDouble("trig-from", -1);
+    t.toMs = savedDouble("trig-to", -1);
+    t.target = std::clamp((int)savedDouble("trig-target", 0), 0, triggers::targetCount() - 1);
+    t.steps = std::clamp((int)savedDouble("trig-steps", 1), 1, triggers::kMaxSteps);
+    m_trigPreset = std::clamp((int)savedDouble("trig-preset", 0), 0, triggers::presetCount() - 1);
+    // "0,3,9" and "1|1,5||2"
+    auto colors = utils::string::split(s.setting("trig-colors", "").asString().unwrapOr(""), ",");
+    auto groups = utils::string::split(s.setting("trig-groups", "").asString().unwrapOr(""), "|");
+    for (int i = 0; i < triggers::kMaxSteps; i++) {
+        t.step[i].color = 0;
+        t.step[i].groups = "1";
+        if (i < (int)colors.size())
+        {
+            // "1:FF5AC8" (older versions saved just "3")
+            auto const& c = colors[i];
+            auto colon = c.find(':');
+            if (auto v = numFromString<int>(c.substr(0, colon)))
+                t.step[i].color = std::clamp(*v, 0, triggers::paletteCount() - 1);
+            if (colon != std::string::npos)
+                if (auto v = numFromString<unsigned>(c.substr(colon + 1), 16)) t.step[i].rgb = *v & 0xFFFFFF;
+        }
+        if (i < (int)groups.size()) t.step[i].groups = groups[i];
+    }
+}
+
+void TimingEditor::saveTriggerSettings() {
+    auto const& t = m_trig;
+    saveSetting("trig-kind", (int)t.kind);
+    saveSetting("trig-loop", t.placement == triggers::Placement::Loop ? 1 : 0);
+    saveSetting("trig-every", t.every);
+    saveSetting("trig-from", t.fromMs);
+    saveSetting("trig-to", t.toMs);
+    saveSetting("trig-target", t.target);
+    saveSetting("trig-steps", t.steps);
+    saveSetting("trig-preset", m_trigPreset);
+    std::string colors, groups;
+    for (int i = 0; i < triggers::kMaxSteps; i++) {
+        colors += fmt::format("{}:{:06X},", t.step[i].color, t.step[i].rgb & 0xFFFFFF);
+        std::string g;
+        for (char c : t.step[i].groups)
+            if ((c >= '0' && c <= '9') || c == ',') g += c;
+        groups += g + "|";
+    }
+    saveSetting("trig-colors", colors);
+    saveSetting("trig-groups", groups);
+}
+
+void TimingEditor::refreshTriggerTab() {
+    if (m_triggerTab < 0 || m_triggerTab >= (int)m_tabs.size() || !m_trigPlaceLabel) return;
+    bool pulse = m_trig.kind != triggers::Kind::Spawn, loop = m_trig.placement == triggers::Placement::Loop;
+    bool active = m_tab == m_triggerTab && !m_layoutEdit;
+    // the settings of the other kind are hidden (and their fields can not be clicked)
+    auto show = [&](std::vector<CCNode*> const& nodes, bool on) {
+        for (auto n : nodes) {
+            n->setVisible(on);
+            if (auto in = typeinfo_cast<TextInput*>(n)) in->setEnabled(on && active);
+        }
+    };
+    show(m_pulseOnly, pulse);
+    show(m_spawnOnly, !pulse);
+    // the picture of the trigger (GD's own toolbar button)
+    if (m_trigKindIcon) {
+        if (auto frame = CCSpriteFrameCache::get()->spriteFrameByName(
+            m_trig.kind == triggers::Kind::Pulse ? "edit_ePulseBtn_001.png"
+            : m_trig.kind == triggers::Kind::Spawn ? "edit_eSpawnBtn_001.png" : "edit_eTintCol01Btn_001.png")) {
+            m_trigKindIcon->setDisplayFrame(frame);
+            m_trigKindIcon->setScale(30.f / std::max(1.f, m_trigKindIcon->getContentSize().height));
+        }
+    }
+    setRoundText(m_trigPlaceLabel, loop ? "SPAWN LOOP" : "ON BEATS");
+    setRoundText(m_trigEveryLabel, triggers::everyName(m_trig.every));
+    setRoundText(m_trigStepsLabel, fmt::format("{}", m_trig.steps));
+    setRoundText(m_trigTargetLabel, triggers::targetName(m_trig.target));
+    if (m_trigPresetLabel) {
+        m_trigPresetLabel->setString(fmt::format("Preset: {}", triggers::presetName(m_trigPreset)).c_str());
+        m_trigPresetLabel->limitLabelWidth(100, .3f, .12f);
+    }
+    auto sec = [](double ms) { return ms < 0 ? std::string() : fmt::format("{:.3f}", ms / 1000.0); };
+    m_updatingInputs = true;
+    if (m_trigFromInput && !m_trigFromInput->getInputNode()->m_selected) m_trigFromInput->setString(sec(m_trig.fromMs));
+    if (m_trigToInput && !m_trigToInput->getInputNode()->m_selected) m_trigToInput->setString(sec(m_trig.toMs));
+    m_updatingInputs = false;
+    m_trigTimesAt = -10; // the count / preview is recalculated in update()
+    m_trigDirty = true;  // so are the squares
+}
+
+// the squares of the steps (row 3) and the color palette of the selected step (row 4); rebuilt from update() so a
+// button never deletes itself
+void TimingEditor::rebuildTriggerSteps() {
+    m_trigDirty = false;
+    if (!m_trigMenu) return;
+    m_trigMenu->removeAllChildren();
+    bool pulse = m_trig.kind != triggers::Kind::Spawn;
+    bool colorKind = m_trig.kind == triggers::Kind::Color;
+    int K = std::clamp(m_trig.steps, 1, triggers::kMaxSteps);
+    m_trigSel = std::clamp(m_trigSel, 0, K - 1);
+
+    // a colored square (drawn 4x larger and scaled down so the corners stay small), outlined when it is selected
+    auto square = [&](float w, float h, ccColor3B col, bool selected, std::string const& label) {
+        auto node = CCNode::create();
+        node->setContentSize({ w + 4, h + 4 });
+        node->setAnchorPoint({ .5f, .5f });
+        if (selected) {
+            auto ring = CCScale9Sprite::create("square02b_001.png", { 0, 0, 80, 80 });
+            ring->setContentSize({ (w + 4) * 4, (h + 4) * 4 });
+            ring->setScale(.25f);
+            ring->setPosition({ (w + 4) / 2, (h + 4) / 2 });
+            node->addChild(ring);
+        }
+        auto cell = CCScale9Sprite::create("square02b_001.png", { 0, 0, 80, 80 });
+        cell->setContentSize({ w * 4, h * 4 });
+        cell->setScale(.25f);
+        cell->setColor(col);
+        cell->setPosition({ (w + 4) / 2, (h + 4) / 2 });
+        node->addChild(cell);
+        if (!label.empty()) {
+            auto l = CCLabelBMFont::create(label.c_str(), "bigFont.fnt");
+            l->setScale(.3f);
+            l->limitLabelWidth(w - 2, .3f, .12f);
+            l->setPosition({ (w + 4) / 2, (h + 4) / 2 + 1 });
+            node->addChild(l, 2);
+        }
+        return node;
+    };
+
+    for (int i = 0; i < K; i++) {
+        ccColor3B col{ 70, 70, 85 };
+        std::string label;
+        if (pulse) {
+            if (m_trig.active(i)) {
+                unsigned char r, g, b;
+                triggers::stepRGB(m_trig.step[i], r, g, b);
+                col = m_trig.step[i].color == 0 ? ccColor3B{ 255, 245, 190 } : ccColor3B{ r, g, b };
+                if (m_trig.step[i].color == 0) label = "+";
+            } else label = "X";
+        } else {
+            auto groups = triggers::parseGroups(m_trig.step[i].groups);
+            if (!groups.empty()) {
+                col = { 90, 220, 110 };
+                label = fmt::format("{}", groups[0]);
+            } else label = "-";
+        }
+        auto item = CCMenuItemExt::createSpriteExtra(square(22, 20, col, i == m_trigSel, label), [this, i](auto) {
+            m_trigSel = i;
+            m_trigDirty = true;
+        });
+        item->setPosition({ m_trigStepsX + 26.f * i + 13, 46 });
+        m_trigMenu->addChild(item);
+    }
+
+    if (pulse) {
+        // the color of the selected step: a picked color (the swatch opens GD's color picker), the channel's own
+        // color brightened (+, pulse only) or nothing (X)
+        auto& cur = m_trig.step[m_trigSel];
+        unsigned char r, g, b;
+        triggers::stepRGB(cur, r, g, b);
+        bool custom = cur.color >= 1 && !triggers::paletteIsOff(cur.color);
+        auto swatch = CCMenuItemExt::createSpriteExtra(square(30, 16, { r, g, b }, custom, ""), [this](auto) {
+            auto& st = m_trig.step[std::clamp(m_trigSel, 0, triggers::kMaxSteps - 1)];
+            unsigned char r, g, b;
+            triggers::stepRGB(st, r, g, b);
+            auto popup = ColorPickPopup::create(ccColor4B{ r, g, b, 255 });
+            int sel = m_trigSel;
+            popup->setCallback([this, sel](ccColor4B const& c) {
+                auto& st = m_trig.step[std::clamp(sel, 0, triggers::kMaxSteps - 1)];
+                st.color = 1;
+                st.rgb = (unsigned)c.r << 16 | (unsigned)c.g << 8 | c.b;
+                saveTriggerSettings();
+                m_trigDirty = true;
+                m_trigTimesAt = -10;
+            });
+            popup->show();
+        });
+        swatch->setPosition({ m_trigPalX + 18, 22 });
+        m_trigMenu->addChild(swatch);
+        if (!colorKind) {
+            auto bright = CCMenuItemExt::createSpriteExtra(square(18, 16, { 255, 245, 190 }, cur.color == 0, "+"), [this](auto) {
+                m_trig.step[m_trigSel].color = 0;
+                saveTriggerSettings();
+                m_trigDirty = true;
+                m_trigTimesAt = -10;
+            });
+            bright->setPosition({ m_trigPalX + 52, 22 });
+            m_trigMenu->addChild(bright);
+        }
+        auto none = CCMenuItemExt::createSpriteExtra(
+            square(18, 16, { 70, 70, 85 }, triggers::paletteIsOff(cur.color), "X"), [this](auto) {
+                m_trig.step[m_trigSel].color = triggers::paletteCount() - 1;
+                saveTriggerSettings();
+                m_trigDirty = true;
+                m_trigTimesAt = -10;
+            });
+        none->setPosition({ m_trigPalX + 78, 22 });
+        m_trigMenu->addChild(none);
+    } else if (m_trigGroupsInput && !m_trigGroupsInput->getInputNode()->m_selected) {
+        m_updatingInputs = true;
+        m_trigGroupsInput->setString(m_trig.step[m_trigSel].groups);
+        m_updatingInputs = false;
+    }
+    m_trigMenu->setEnabled(m_tab == m_triggerTab && !m_layoutEdit);
+}
+
+void TimingEditor::placeTriggers() {
+    auto& s = Session::get();
+    if (!LevelEditorLayer::get()) {
+        Notification::create("Open this from the level editor", NotificationIcon::Error)->show();
+        return;
+    }
+    bool loop = m_trig.placement == triggers::Placement::Loop;
+    if (triggers::everyDivisor(m_trig.every) >= 0 && s.map.empty()) {
+        Notification::create("Add a timing point (BPM) first", NotificationIcon::Error)->show();
+        return;
+    }
+    auto ts = triggers::times(s.map, s.envelope.get(), m_trig, songLength());
+    if (ts.empty()) {
+        Notification::create(triggers::everyDivisor(m_trig.every) < 0 ? "No hits found here (load the song first)"
+                                                                       : "No beats in this part", NotificationIcon::Error)->show();
+        return;
+    }
+    char const* kind = m_trig.kind == triggers::Kind::Pulse ? "pulse" : m_trig.kind == triggers::Kind::Spawn ? "spawn" : "color";
+    auto what = loop ? fmt::format("a <cy>{} spawn loop</c> for <cg>{}</c> hits", kind, ts.size())
+                     : fmt::format("<cg>{}</c> {} triggers", triggers::objectCount(m_trig, ts.size()), kind);
+    auto settings = m_trig;
+    createQuickPopup("Place triggers",
+        fmt::format("Put {} into the level?\nOne <cy>Ctrl+Z</c> in the editor removes all of them.", what),
+        "Cancel", "Place", [settings](auto, bool yes) {
+            if (!yes) return;
+            auto& s = Session::get();
+            std::string err;
+            double len = s.audio ? s.audio->lengthMs : (s.map.empty() ? 60000.0 : s.map.points.back().time + 30000.0);
+            int n = triggers::place(s.map, s.envelope.get(), settings, len, &err);
+            if (n <= 0) Notification::create(err.empty() ? "Nothing placed" : err, NotificationIcon::Error)->show();
+            else Notification::create(fmt::format("Placed {} trigger{}", n, n == 1 ? "" : "s"), NotificationIcon::Success)->show();
+        });
 }
 
 void TimingEditor::zoom(double factor, double anchorMs) {
@@ -1829,33 +2591,32 @@ bool TimingEditor::ccTouchBegan(CCTouch* touch, CCEvent* event) {
         m_dragStartX = p.x;
         m_dragStartView = m_viewStart;
         m_drag = Drag::Pending;
-        int best = -1;
-        float bestDist = 6;
+        // timing points (red, triangle at the top) and rhythm points (purple, triangle at the bottom)
+        int best = -1, bestR = -1;
+        float bestDist = 7, bestDistR = m_tab == m_rhythmTab ? 10.f : 7.f;
         for (int i = 0; i < (int)s.map.points.size(); i++) {
             float d = std::abs(xAtTime(s.map.points[i].time) - p.x);
             if (d < bestDist) { bestDist = d; best = i; }
         }
-        if (best >= 0) {
+        for (int i = 0; i < (int)s.map.rhythm.size(); i++) {
+            float d = std::abs(xAtTime(s.map.rhythm[i].time) - p.x);
+            if (d < bestDistR) { bestDistR = d; bestR = i; }
+        }
+        // both under the mouse (a rhythm point made on a timing point): the Rhythm tab grabs the rhythm point,
+        // elsewhere the lower half of the waveform (where its purple triangle is) grabs it
+        bool rhythm = bestR >= 0 && (best < 0 || m_tab == m_rhythmTab || p.y < WY + WH * .5f);
+        if (rhythm) {
+            if (bestR != m_rhythmSel) m_rhythmPage = 0;
+            m_rhythmSel = bestR;
+            m_drag = Drag::Rhythm;
+            m_dragStartTime = s.map.rhythm[bestR].time;
+            if (m_rhythmTab >= 0 && m_tab != m_rhythmTab) switchTab(m_rhythmTab);
+            refreshPanel();
+        } else if (best >= 0) {
             m_selected = best;
             m_drag = Drag::Marker;
             m_dragStartTime = s.map.points[best].time;
             refreshPanel();
-        } else {
-            // rhythm markers (purple)
-            int bestR = -1;
-            float bestDistR = 6;
-            for (int i = 0; i < (int)s.map.rhythm.size(); i++) {
-                float d = std::abs(xAtTime(s.map.rhythm[i].time) - p.x);
-                if (d < bestDistR) { bestDistR = d; bestR = i; }
-            }
-            if (bestR >= 0) {
-                if (bestR != m_rhythmSel) m_rhythmPage = 0;
-                m_rhythmSel = bestR;
-                m_drag = Drag::Rhythm;
-                m_dragStartTime = s.map.rhythm[bestR].time;
-                if (m_rhythmTab >= 0) switchTab(m_rhythmTab);
-                refreshPanel();
-            }
         }
         return true;
     }
@@ -1895,8 +2656,11 @@ void TimingEditor::ccTouchMoved(CCTouch* touch, CCEvent* event) {
         case Drag::Rhythm:
             if (m_rhythmSel >= 0 && m_rhythmSel < (int)s.map.rhythm.size()) {
                 double t = m_dragStartTime + (p.x - m_dragStartX) * m_msPerPx;
-                // rhythm points sit on beats (Alt = free)
-                if (!CCKeyboardDispatcher::get()->getAltKeyPressed() && !s.map.empty()) t = s.map.snap(t, 1);
+                // rhythm points snap to the Grid of the Timing Points tab (1/4 ...) unless "Snap to grid" is off
+                // (Alt = free for this drag)
+                bool snap = savedBool("rhythm-snap", true) && !CCKeyboardDispatcher::get()->getAltKeyPressed();
+                if (snap && !s.map.empty()) t = s.map.snap(t, m_divisor);
+                else t = std::round(t);
                 s.map.rhythm[m_rhythmSel].time = t;
                 refreshPanel();
             }
@@ -1949,7 +2713,37 @@ double TimingEditor::playPosition() const {
     return pos;
 }
 
+void TimingEditor::releaseRateDsps() {
+    for (auto dsp : m_rateDsps) {
+        if (m_channel) m_channel->removeDSP(dsp);
+        dsp->release();
+    }
+    m_rateDsps.clear();
+}
+
+// the channel plays at m_rate of its normal frequency; pitch shifters (up to 2x each) bring the pitch back up
+void TimingEditor::applyRate() {
+    releaseRateDsps();
+    if (!m_channel || !m_sound) return;
+    float freq = 0;
+    int priority = 0;
+    if (m_sound->getDefaults(&freq, &priority) != FMOD_OK || freq <= 0) return;
+    m_channel->setFrequency(freq * m_rate);
+    auto sys = FMODAudioEngine::get()->m_system;
+    for (float need = 1.f / m_rate; need > 1.001f;) {
+        float step = std::min(2.f, need);
+        FMOD::DSP* dsp = nullptr;
+        if (sys->createDSPByType(FMOD_DSP_TYPE_PITCHSHIFT, &dsp) != FMOD_OK || !dsp) break;
+        dsp->setParameterFloat(FMOD_DSP_PITCHSHIFT_PITCH, step);
+        dsp->setParameterFloat(FMOD_DSP_PITCHSHIFT_FFTSIZE, 2048.f);
+        m_channel->addDSP(0, dsp);
+        m_rateDsps.push_back(dsp);
+        need /= step;
+    }
+}
+
 void TimingEditor::stopPlayback() {
+    releaseRateDsps();
     if (m_channel) m_channel->stop();
     m_channel = nullptr;
     if (m_sound) m_sound->release();
@@ -1985,7 +2779,10 @@ void TimingEditor::togglePlay() {
     // a channel that finished or was stolen by FMOD is invalid - make a new one
     if (m_channel) {
         bool isPlaying = false;
-        if (m_channel->isPlaying(&isPlaying) != FMOD_OK || !isPlaying) m_channel = nullptr;
+        if (m_channel->isPlaying(&isPlaying) != FMOD_OK || !isPlaying) {
+            releaseRateDsps();
+            m_channel = nullptr;
+        }
     }
     if (!m_sound || m_soundPath != s.audioPath) {
         stopPlayback();
@@ -2004,11 +2801,13 @@ void TimingEditor::togglePlay() {
     }
     if (m_channel->setPosition((unsigned)std::max(0.0, m_cursor), FMOD_TIMEUNIT_MS) != FMOD_OK) {
         // stale channel - start a fresh one at the cursor
+        releaseRateDsps();
         sys->playSound(m_sound, nullptr, true, &m_channel);
         if (!m_channel) return;
         m_channel->setVolume(FMODAudioEngine::get()->m_musicVolume);
         m_channel->setPosition((unsigned)std::max(0.0, m_cursor), FMOD_TIMEUNIT_MS);
     }
+    applyRate();
     m_channel->setPaused(false);
     m_tracker.reset();
     m_playing = true;
@@ -2079,6 +2878,7 @@ void TimingEditor::addPointAtCursor() {
     s.map.points.push_back(p);
     m_selected = (int)s.map.points.size() - 1;
     changed();
+    toast(fmt::format("Timing point added at {}", fmtTime(p.time)));
 }
 
 void TimingEditor::deletePoint() {
@@ -2087,6 +2887,7 @@ void TimingEditor::deletePoint() {
     s.map.points.erase(s.map.points.begin() + m_selected);
     m_selected = std::min(m_selected, (int)s.map.points.size() - 1);
     changed();
+    toast("Timing point deleted");
 }
 
 void TimingEditor::shiftPoint(double ms) {
@@ -2151,7 +2952,7 @@ void TimingEditor::update(float dt) {
             if (s.editorMetronome()) m_tracker.update(pos, s.map);
             m_cursor = pos;
             double rel = (pos - m_viewStart) / (WW * m_msPerPx);
-            if (rel > 0.75 || rel < 0) m_viewStart = pos - WW * m_msPerPx * 0.25;
+            if (m_followPlay && (rel > 0.75 || rel < 0)) m_viewStart = pos - WW * m_msPerPx * 0.25;
         }
     }
     if (s.busy) {
@@ -2160,7 +2961,8 @@ void TimingEditor::update(float dt) {
         std::string st = m_statusLabel->getString();
         if (st.find("%") != std::string::npos) m_statusLabel->setString("");
     }
-    setRoundText(m_divLabel, fmt::format("1/{}", m_divisor));
+    // the editor's 1/N button changes the guidelines too
+    setRoundText(m_halfLabel, fmt::format("1/{}", s.guideDivisor()));
 
     // grid position of the cursor
     if (s.map.empty()) {
@@ -2176,7 +2978,28 @@ void TimingEditor::update(float dt) {
             m_gridLabel->setColor(g.den == 0 ? ccColor3B{ 255, 120, 120 } : ccColor3B{ 140, 255, 140 });
         }
     }
-    limitNodeWidth(m_gridLabel, 118, .5f, .2f);
+    // the second row of tabs starts one cell later, so this text has the room up to Files
+    limitNodeWidth(m_gridLabel, kTabLeft + kTabW - WX - 4, .5f, .2f);
+    if (m_tab == m_triggerTab && m_trigCountLabel && m_clock - m_trigTimesAt > .5) {
+        m_trigTimesAt = m_clock;
+        m_trigTimes = triggers::times(s.map, s.envelope.get(), m_trig, songLength());
+        bool loop = m_trig.placement == triggers::Placement::Loop;
+        std::string count;
+        if (!LevelEditorLayer::get()) count = "Open from the editor";
+        else if (loop && triggers::everyDivisor(m_trig.every) < 0) count = "Loop: not with HITS";
+        else if (loop) {
+            // one loop per BPM / rhythm pattern in the part
+            int loops = triggers::loopCount(s.map, m_trig, m_trigTimes);
+            count = fmt::format("{} loop{}, {} hits", loops, loops == 1 ? "" : "s", m_trigTimes.size());
+        }
+        else {
+            int n = triggers::objectCount(m_trig, m_trigTimes.size());
+            count = fmt::format("{} trigger{}", n, n == 1 ? "" : "s");
+        }
+        m_trigCountLabel->setString(count.c_str());
+        m_trigCountLabel->limitLabelWidth(120, .34f, .15f);
+    }
+    if (m_trigDirty && m_tab == m_triggerTab) rebuildTriggerSteps();
     rebuildRhythmGrid();
     redraw();
 }
@@ -2281,11 +3104,38 @@ void TimingEditor::redraw() {
             }
         }
     }
+    // Triggers tab: the part is green, a short green tick for every trigger
+    if (m_tab == m_triggerTab && m_triggerTab >= 0) {
+        auto [from, to] = triggers::range(m_trig, songLength());
+        float x0 = std::max(WX, xAtTime(from)), x1 = std::min(WX + WW, xAtTime(to));
+        if (x1 > x0) m_draw->drawRect(CCRect(x0, WY, x1 - x0, WH), rgba(.3f, 1, .4f, .08f), .5f, rgba(.3f, 1, .4f, .5f));
+        auto it = std::lower_bound(m_trigTimes.begin(), m_trigTimes.end(), m_viewStart);
+        for (; it != m_trigTimes.end() && *it <= viewEnd; ++it) {
+            float x = xAtTime(*it);
+            m_draw->drawSegment({ x, WY + WH - 12 }, { x, WY + WH }, .7f, rgba(.4f, 1, .5f, .95f));
+        }
+    }
     // beat start found by the analysis
     if (s.firstBeatMs >= 0) {
         float x = xAtTime(s.firstBeatMs);
         if (x >= WX && x <= WX + WW) m_draw->drawSegment({ x, WY }, { x, WY + 10 }, 1, rgba(0.3f, 1, 0.3f, 1));
     }
+    // where the level's song starts (Song Start): only shown, it is changed with the Song Start controls
+    bool showStart = false;
+    if (auto ls = Session::levelSettings()) {
+        float x = xAtTime(ls->m_songOffset * 1000.0);
+        if (x >= WX && x <= WX + WW) {
+            auto col = rgba(.25f, 1, .8f, .95f);
+            m_draw->drawSegment({ x, WY }, { x, WY + WH }, .9f, col);
+            CCPoint flag[3] = { { x, WY + WH - 14 }, { x + 9, WY + WH - 18 }, { x, WY + WH - 22 } };
+            m_draw->drawPolygon(flag, 3, col, 0, col);
+            if (m_startLabel) {
+                m_startLabel->setPosition({ std::min(x + 11, WX + WW - 60), WY + WH - 14 });
+                showStart = true;
+            }
+        }
+    }
+    if (m_startLabel) m_startLabel->setVisible(showStart);
     // cursor / play head
     float cx = xAtTime(m_cursor);
     if (cx >= WX && cx <= WX + WW)
@@ -2305,6 +3155,11 @@ void TimingEditor::redraw() {
             m_draw->drawSegment({ OX + px, OY + OH / 2 - h }, { OX + px, OY + OH / 2 + h }, 0.5f, rgba(0.3f, 0.6f, 0.9f, 0.7f));
         }
     }
+    if (m_tab == m_triggerTab && m_triggerTab >= 0) {
+        auto [from, to] = triggers::range(m_trig, len);
+        float o0 = float(OX + std::clamp(from / len, 0.0, 1.0) * OW), o1 = float(OX + std::clamp(to / len, 0.0, 1.0) * OW);
+        if (o1 > o0) m_draw->drawRect(CCRect(o0, OY, o1 - o0, OH), rgba(.3f, 1, .4f, .25f), 0, rgba(0, 0, 0, 0));
+    }
     for (auto const& p : s.map.points) {
         float x = float(OX + p.time / len * OW);
         if (x >= OX && x <= OX + OW) m_draw->drawSegment({ x, OY }, { x, OY + OH }, 0.4f, rgba(1, 0.2f, 0.2f, 0.9f));
@@ -2314,6 +3169,33 @@ void TimingEditor::redraw() {
     if (v1 > v0) m_draw->drawRect(CCRect(v0, OY, std::max(1.f, v1 - v0), OH), rgba(1, 1, 1, 0.12f), 0.4f, rgba(1, 1, 1, 0.6f));
     float ocx = float(OX + m_cursor / len * OW);
     m_draw->drawSegment({ ocx, OY - 1 }, { ocx, OY + OH + 1 }, 0.5f, rgba(1, 1, 0.4f, 1));
+
+    // top right: one square per beat of the bar, the current one lights up (pink = first beat, purple = the rest)
+    // and fades until the next beat while playing
+    if (int pi = s.map.indexAt(m_cursor); pi >= 0) {
+        auto const& p = s.map.points[pi];
+        int meter = std::clamp(p.meter, 1, 16);
+        double beats = (m_cursor - p.time) / p.beatLength;
+        long long b = (long long)std::floor(beats + 1e-6);
+        double phase = std::clamp(beats - b, 0.0, 1.0);
+        int cur = (int)(((b % meter) + meter) % meter);
+        float gap = 3, size = std::min(11.f, (150 - gap * (meter - 1)) / meter);
+        float right = POP_W - 16, y = POP_H - 15;
+        float glow = m_playing ? (float)std::pow(1 - phase, 2) : 1.f;
+        for (int i = 0; i < meter; i++) {
+            float x = right - (meter - i) * size - (meter - 1 - i) * gap;
+            bool first = i == 0, on = i == cur;
+            ccColor4F base = first ? rgba(1, .45f, .85f) : rgba(.6f, .3f, 1);
+            float k = on ? .35f + .65f * glow : .18f;
+            ccColor4F fill = rgba(base.r * k, base.g * k, base.b * k, .95f);
+            if (on && glow > .05f) {
+                float g = 2.5f * glow;
+                m_draw->drawRect(CCRect(x - g, y - size / 2 - g, size + 2 * g, size + 2 * g),
+                                 rgba(base.r, base.g, base.b, .35f * glow), 0, rgba(0, 0, 0, 0));
+            }
+            m_draw->drawRect(CCRect(x, y - size / 2, size, size), fill, .6f, rgba(0, 0, 0, .8f));
+        }
+    }
 
     double bpm = s.map.bpmAt(m_cursor);
     m_infoLabel->setString(fmt::format("{} / {}  BPM {}",

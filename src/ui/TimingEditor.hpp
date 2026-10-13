@@ -2,6 +2,7 @@
 #include <map>
 #include "../audio/Metronome.hpp"
 #include "../timing/TimingMap.hpp"
+#include "../Triggers.hpp"
 
 #include <Geode/Geode.hpp>
 #include <Geode/ui/BasedButtonSprite.hpp>
@@ -58,6 +59,7 @@ private:
     int m_rhythmTab = -1;
     int m_rhythmSel = -1;
     int m_rhythmPage = 0; // which bar of the pattern is shown
+    CCMenuItemToggler* m_rhythmSnapCheck = nullptr; // rhythm points snap to the Grid (saved per level)
     cocos2d::CCMenu* m_rhythmGrid = nullptr;
     cocos2d::CCLabelBMFont* m_rhythmLabel = nullptr;
     cocos2d::CCLabelBMFont* m_rhythmLenLabel = nullptr;
@@ -73,6 +75,33 @@ private:
     void rhythmFromAudio();
     int rhythmMeter(int idx) const;
 
+    // triggers (Triggers tab): pulses / spawns / spawn loops on the beats, put into the level editor
+    int m_triggerTab = -1;
+    triggers::Settings m_trig;
+    std::vector<cocos2d::CCNode*> m_pulseOnly, m_spawnOnly; // controls shown for one kind only
+    cocos2d::CCSprite* m_trigKindIcon = nullptr;     // the picture of the trigger that is made
+    cocos2d::CCLabelBMFont* m_trigPlaceLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_trigEveryLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_trigStepsLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_trigTargetLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_trigPresetLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_trigCountLabel = nullptr;
+    cocos2d::CCMenu* m_trigMenu = nullptr;           // step squares + color palette (rebuilt from update())
+    geode::TextInput* m_trigFromInput = nullptr;
+    geode::TextInput* m_trigToInput = nullptr;
+    geode::TextInput* m_trigGroupsInput = nullptr;
+    int m_trigSel = 0;                               // the step that is edited
+    int m_trigPreset = 0;
+    bool m_trigDirty = true;
+    float m_trigStepsX = 0, m_trigPalX = 0;
+    std::vector<double> m_trigTimes; // preview of where they go (refreshed now and then)
+    double m_trigTimesAt = -10;
+    void rebuildTriggerSteps();
+    void loadTriggerSettings();
+    void saveTriggerSettings();
+    void refreshTriggerTab();
+    void placeTriggers();
+
     // view
     double m_viewStart = -500;
     double m_msPerPx = 8;
@@ -87,12 +116,28 @@ private:
     std::filesystem::path m_soundPath;
     bool m_playing = false;
     bool m_fromEditor = false; // sync playback with the level editor on close
+    // playback speed (1 = normal); slower keeps the pitch with FMOD pitch shifters on the channel
+    float m_rate = 1.f;
+    bool m_followPlay = true; // the waveform scrolls with the playing cursor
+    std::vector<FMOD::DSP*> m_rateDsps;
+    cocos2d::CCLabelBMFont* m_rateLabel = nullptr;
+    void applyRate();
+    void releaseRateDsps();
     metronome::Tracker m_tracker;
 
     // undo / redo of timing point edits (Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z)
-    std::vector<TimingMap> m_undo;
-    std::vector<TimingMap> m_redo;
-    TimingMap m_lastMap;           // timing after the last recorded change
+    // one step of the history: the timing + rhythm, where the song starts and the guideline snap
+    struct Snapshot {
+        TimingMap map;
+        double songOffset = -1; // seconds, -1 = no level to change
+        int guideDivisor = 1;
+        std::string key() const;
+    };
+    std::vector<Snapshot> m_undo;
+    std::vector<Snapshot> m_redo;
+    Snapshot m_lastMap;            // state after the last recorded change
+    Snapshot snapshot() const;
+    void restore(Snapshot const& snap);
     std::string m_historyKey;      // song + level the history belongs to
     double m_lastRecord = -10;     // m_clock of the last recorded change (quick edits are merged)
 
@@ -111,6 +156,7 @@ private:
     cocos2d::CCLabelBMFont* m_fileLabel = nullptr;
     cocos2d::CCLabelBMFont* m_infoLabel = nullptr;
     cocos2d::CCLabelBMFont* m_gridLabel = nullptr;
+    cocos2d::CCLabelBMFont* m_startLabel = nullptr; // "Song Start" next to its line on the waveform
     cocos2d::CCLabelBMFont* m_pointLabel = nullptr;
     cocos2d::CCLabelBMFont* m_statusLabel = nullptr;
     cocos2d::CCLabelBMFont* m_divLabel = nullptr;
@@ -136,6 +182,7 @@ private:
     bool inCurrentTab(cocos2d::CCNode* n) const;
     cocos2d::CCNode* pickUiNode(cocos2d::CCPoint p) const;
     CCMenuItemToggler* m_metroCheck = nullptr;
+    CCMenuItemToggler* m_waveCheck = nullptr; // WAVE: the song waveform behind the level in the editor
     CCMenuItemToggler* m_allCheck = nullptr;
     CCMenuItemToggler* m_changesCheck = nullptr;
     cocos2d::CCLabelBMFont* m_halfLabel = nullptr;
@@ -175,6 +222,9 @@ private:
                                           geode::Function<void()> cb, float size = 24.f);
     void addCaption(Tab& tab, char const* text, cocos2d::CCPoint pos);
     void switchTab(int idx);
+    cocos2d::CCNode* m_toast = nullptr;
+    cocos2d::CCLabelBMFont* m_toastLabel = nullptr;
+    void toast(std::string const& text);
     CCMenuItemSpriteExtra* addButton(cocos2d::CCMenu* menu, char const* text, cocos2d::CCPoint pos,
                                      geode::Function<void()> cb, char const* bg = "GJ_button_04.png",
                                      cocos2d::CCLabelBMFont** labelOut = nullptr, float scale = .5f);

@@ -1,3 +1,37 @@
+# v1.3.0
+
+## New: Triggers tab
+- Puts **pulse**, **spawn** or **color** triggers into the level, exactly on the beats (speed portals included)
+- **On beats** (one trigger per beat) or one **spawn loop** with a stop trigger at the end
+- Every bar, 1/1 ... 1/8 or on the hits found in the song; rhythm patterns are followed
+- Start / End of the part (or the yellow cursor), up to 8 **steps** (colors or groups one after another), presets
+- Placed at the editor's height, removed with one Ctrl+Z
+
+## Playback
+- New rows: **Main**, **Metronome**, **Song Start / Guidelines**
+- **Speed**: play slower (100% / 75% / 50% / 25%), the pitch stays
+- Go to the end of the song, go to the Song Start line, **follow** the cursor on / off
+- **Song Start** line on the waveform
+- **Automatic Guidelines** checkmark moved here from the mod settings
+- **WAVE** switch (Editor Waveform) in the window
+- Four beat squares in the top right corner blink on the beats
+- Metronome sounds: classic and wood
+
+## Timing window
+- Tabs in two rows (Playback, Timing Points, Rhythm / Files, Triggers)
+- **Undo / Redo** buttons in the top left corner; undo also covers Song Start and 1/N
+- Waveform grid (pink 1/N) and zoom next to the title
+- A short message above the window after every action
+- Rhythm: **Snap to grid** on / off, **Clear bar**, **X** per beat, every snap 1/1 ... 1/16 (odd ones too), better dragging
+- New icons, simpler help (i) for every tab
+- Guideline 1/N up to 1/12 and 1/16
+
+## Editor
+- Pause menu: the mod's settings (gear + note) and a separate **UI** button for UI Settings
+
+## Fixes
+- Timing, rhythm and settings of a level are saved reliably (stable level key, safe writes, saved even without the song loaded)
+
 # v1.2.0
 
 ## Timing window

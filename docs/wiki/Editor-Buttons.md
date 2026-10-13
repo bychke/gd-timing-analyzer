@@ -2,12 +2,14 @@
 
 In the level editor the mod adds four round buttons next to the music button.
 
+![The editor buttons and the beat text](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/screens/editor-buttons.png)
+
 | Button | What it does |
 |---|---|
 | **BPM ON / OFF** | The metronome. Clicks on the beats while the editor music plays. Shared with the window's **BPM** button |
 | **WAVE ON / OFF** | Draws the song's waveform (semi-transparent) behind the level. It follows speed portals and the song's start offset, so you can see the music against your objects |
 | **TIME** (note on a waveform) | Opens the [timing window](Timing-Window) at the moment you are looking at, and continues from there when you close it |
-| **1/N** | Cycles the snap of the [guidelines](Guidelines) of the whole level: 1/1, 1/2, 1/3, 1/4, 1/6, 1/8. Redraws them at once |
+| **1/N** | Cycles the snap of the [guidelines](Guidelines) of the whole level: 1/1, 1/2, 1/3, 1/4, 1/6, 1/8, 1/12, 1/16. Redraws them at once |
 
 Two lines at the top of the screen show where you are on the beat grid:
 
@@ -29,7 +31,7 @@ Turn them off or move them in [UI Settings → Text](UI-Settings#text).
 
 The buttons can cover other buttons (especially with BetterEdit), so you can place them where there is room.
 
-1. In the editor press **TIME**, then **UI Settings**.
+1. In the editor press **ESC**, then the **UI** button (a note with *UI* under it).
 2. **Drag anywhere outside the settings window** to move the buttons.
 3. Choose the **Layout**, the **size** and which buttons to **show**, and press **Done**.
 

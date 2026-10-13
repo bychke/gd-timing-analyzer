@@ -14,13 +14,15 @@ timing points like in osu!, and build your level exactly on the beat.
 
 ## Features
 
-- **Waveform** with a beat grid (1/1 ... 1/16), zoom and scrolling, in four tabs: Playback, Timing Points, Rhythm, Files
+- **Waveform** with a beat grid (1/1 ... 1/16), zoom and scrolling, in five tabs: Playback, Timing Points, Rhythm, Files, Triggers
 - **Automatic analysis** of the BPM, tempo changes and first beat
 - **Editable timing points** with **undo / redo**
 - **Rhythm patterns**: a changing rhythm inside one BPM (1/4, then four fast 1/6 hits...)
-- **Metronome** shared by the timing window and the editor, with 3 sounds and an accented first beat
+- **Triggers**: pulse, spawn or color triggers placed exactly on the beats, in steps, or as one spawn loop
+- **Slow playback** (100% ... 25%, same pitch) and a cursor-following waveform
+- **Metronome** shared by the timing window and the editor, with 2 sounds and an accented first beat
 - **Editor buttons**: **BPM** (metronome), **WAVE** (waveform behind the level), **TIME** (opens the timing window
-  at the selected object), **1/N** (guideline snap). Movable, resizable and hideable in **UI Settings**
+  at the selected object), **1/N** (guideline snap). Movable, resizable and hideable in **UI Settings** (ESC → UI)
 - **Guidelines** made from your timing, updated automatically, in custom colors; **song start offset** from the waveform cursor
 - **osu! beatmap import / export**
 - **Local songs**: a level can play any mp3 / ogg / wav / flac from your PC (works with Jukebox NONGs)
@@ -40,7 +42,7 @@ timing points like in osu!, and build your level exactly on the beat.
 ## Guide
 
 Every part of the mod is explained in the **[Wiki](../../wiki)**: the timing window, timing points, rhythm patterns,
-editor buttons, UI settings, metronome, guidelines, local songs, osu! import, settings, shortcuts and a FAQ.
+triggers, editor buttons, UI settings, metronome, guidelines, local songs, osu! import, settings, shortcuts and a FAQ.
 
 ## Usage
 

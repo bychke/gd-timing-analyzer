@@ -173,7 +173,7 @@ class $modify(TimingEditorUI, EditorUI) {
             divSpr->setScale(target / divSpr->getContentSize().height);
             auto divBtn = CCMenuItemExt::createSpriteExtra(divSpr, [divLbl](auto) {
                 auto& s = Session::get();
-                static int const divs[] = { 1, 2, 3, 4, 6, 8 };
+                static int const divs[] = { 1, 2, 3, 4, 6, 8, 12, 16 };
                 int cur = s.guideDivisor(), next = divs[0];
                 for (int d : divs)
                     if (d > cur) { next = d; break; }
@@ -486,7 +486,8 @@ class $modify(TimingEditorPauseLayer, EditorPauseLayer) {
     bool init(LevelEditorLayer* lel) {
         if (!EditorPauseLayer::init(lel)) return false;
 
-        auto spr = CircleButtonSprite::createWithSprite("note_wave.png"_spr, 1.f, CircleBaseColor::Green,
+        // gear + note = the mod's settings
+        auto spr = CircleButtonSprite::createWithSprite("ta_settings.png"_spr, 1.f, CircleBaseColor::Green,
             CircleBaseSize::Medium);
         // all Timing Analyzer settings in a window over the pause menu
         auto btn = CCMenuItemExt::createSpriteExtra(spr, [](auto) {
@@ -495,11 +496,37 @@ class $modify(TimingEditorPauseLayer, EditorPauseLayer) {
         });
         btn->setID("editor-buttons-layout"_spr);
 
+        // second button: a note with "UI" under it -> UI Settings (live preview of the editor buttons, texts and
+        // guideline colors); the pause menu closes so the editor is visible, and comes back afterwards
+        // centered on the circle (anchor in the middle, like a sprite)
+        auto uiTop = CCNode::create();
+        uiTop->setContentSize({ 44, 44 });
+        uiTop->ignoreAnchorPointForPosition(false);
+        uiTop->setAnchorPoint({ .5f, .5f });
+        if (auto note = CCSprite::create("ta_note.png"_spr)) {
+            note->setScale(28.f / std::max(1.f, note->getContentSize().height));
+            note->setPosition({ 22, 28 });
+            uiTop->addChild(note);
+        }
+        auto uiLbl = CCLabelBMFont::create("UI", "bigFont.fnt");
+        uiLbl->setScale(.6f);
+        uiLbl->setPosition({ 22, 7 });
+        uiTop->addChild(uiLbl);
+        auto uiSpr = CircleButtonSprite::create(uiTop, CircleBaseColor::Green, CircleBaseSize::Medium);
+        auto uiBtn = CCMenuItemExt::createSpriteExtra(uiSpr, [this](auto) {
+            this->onResume(nullptr);
+            LayoutPopup::open(0, true);
+        });
+        uiBtn->setID("ui-settings"_spr);
+
         // next to Help (and BetterEdit's button) at the bottom, or an own menu without node IDs
         if (auto menu = this->getChildByIDRecursive("guidelines-menu")) {
-            if (auto first = menu->getChildren() ? static_cast<CCNode*>(menu->getChildren()->objectAtIndex(0)) : nullptr)
+            if (auto first = menu->getChildren() ? static_cast<CCNode*>(menu->getChildren()->objectAtIndex(0)) : nullptr) {
                 spr->setScale(first->getScaledContentSize().height / spr->getContentSize().height);
+                uiSpr->setScale(first->getScaledContentSize().height / uiSpr->getContentSize().height);
+            }
             menu->addChild(btn);
+            menu->addChild(uiBtn);
             menu->updateLayout();
         } else {
             auto win = CCDirector::get()->getWinSize();
@@ -507,7 +534,10 @@ class $modify(TimingEditorPauseLayer, EditorPauseLayer) {
             own->setID("layout-menu"_spr);
             own->setPosition({ win.width / 2 + 90, 30 });
             spr->setScale(.8f);
+            uiSpr->setScale(.8f);
             own->addChild(btn);
+            uiBtn->setPositionX(45);
+            own->addChild(uiBtn);
             this->addChild(own, 10);
         }
         return true;

@@ -40,16 +40,6 @@ std::vector<float> synth(std::string const& type, bool hi) {
         gen(.06f, [&](float t) {
             return std::sin(2 * PI * f * t) * std::exp(-t / .012f) * .9f + noise(rng) * std::exp(-t / .0015f) * .35f;
         });
-    } else if (type == "click") {
-        // very short dry tick (brighter on the first beat)
-        float decay = hi ? .0008f : .0012f;
-        float prev = 0;
-        gen(.02f, [&](float t) {
-            float v = noise(rng) * std::exp(-t / decay);
-            float r = hi ? v - prev * .6f : v * .6f + prev * .4f; // high-pass / low-pass
-            prev = v;
-            return r * 1.4f;
-        });
     } else {
         // classic: short decaying sine
         float f = hi ? 1600.f : 1000.f;

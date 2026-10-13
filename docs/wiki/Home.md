@@ -10,9 +10,10 @@ timing points, and build your level exactly on the beat.
 | I want to... | Read |
 |---|---|
 | Install the mod and open it for the first time | [Getting Started](Getting-Started) |
-| Understand every tab of the timing window (Playback, Timing Points, Rhythm, Files) | [Timing Window](Timing-Window) |
+| Understand every tab of the timing window (Playback, Timing Points, Rhythm, Files, Triggers) | [Timing Window](Timing-Window) |
 | Edit, add, delete and undo timing points | [Timing Points](Timing-Points) |
 | Make a rhythm that changes inside one BPM (1/4, then fast 1/6...) | [Rhythm Patterns](Rhythm-Patterns) |
+| Put pulse, spawn or color triggers on the beats | [Triggers](Triggers) |
 | Use the buttons in the level editor (BPM, WAVE, TIME, 1/N) | [Editor Buttons](Editor-Buttons) |
 | Move, resize or hide those buttons, change the guideline colors | [UI Settings](UI-Settings) |
 | Use the metronome | [Metronome](Metronome) |
@@ -28,7 +29,7 @@ timing points, and build your level exactly on the beat.
 1. Open the timing window (**Custom Song → Timing**, or the **TIME** button in the editor).
 2. Open the **Timing Points** tab and press **Analyze!**. The mod finds the BPM, tempo changes and where the beat starts.
 3. Check the red lines (timing points) against the waveform and nudge them if needed.
-4. Turn on the **BPM** metronome in the editor, or let **Automatic guidelines** draw beat lines for you.
+4. Turn on the **BPM** metronome in the editor, or let **Automatic Guidelines** draw beat lines for you.
 5. Build the level on the beat.
 
 Everything is saved **per level**: every level has its own song, timing and settings.

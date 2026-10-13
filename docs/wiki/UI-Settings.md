@@ -4,8 +4,11 @@ A small see-through window over the level editor with a **live preview**: what y
 
 ## Opening it
 
-In the level editor press **TIME**, then **UI Settings** (right end of the tab bar in the [timing window](Timing-Window)).
-The timing window closes and the settings slide up from the bottom of the screen.
+In the level editor press **ESC** (the pause menu), then the **UI** button: a note with *UI* under it, next to the
+green gear + note button (the mod's settings).
+The settings slide up from the bottom of the screen.
+
+![The two buttons in the editor pause menu](https://raw.githubusercontent.com/bychke/gd-timing-analyzer/main/docs/screens/pause-menu.png)
 Press **Done** to close it.
 
 There are three tabs. **Reset** (top right) resets only the tab you are on.

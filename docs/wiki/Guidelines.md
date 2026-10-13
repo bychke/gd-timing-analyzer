@@ -25,7 +25,7 @@ They start where the song starts (the level's **Start Offset**).
 
 ## Automatic guidelines
 
-With **Automatic guidelines** on (the default), the lines are redrawn **by themselves** whenever
+With **Automatic Guidelines** on (the checkmark in row 3 of the **Playback** tab, on by default), the lines are redrawn **by themselves** whenever
 the timing changes: adding, moving or deleting a timing point, changing a BPM, an analysis, an import, a rhythm pattern.
 They are also drawn when you open the editor. Deleting all points or using **Unload everything** removes them.
 
@@ -33,7 +33,7 @@ With it off, press the green **lines** button in the **Guidelines** group of the
 
 ## Changing the snap
 
-- The **1/N** button in the editor cycles the snap of the whole level: 1/1, 1/2, 1/3, 1/4, 1/6, 1/8.
+- The **1/N** button in the editor cycles the snap of the whole level: 1/1, 1/2, 1/3, 1/4, 1/6, 1/8, 1/12, 1/16.
   The lines are redrawn at once, and the choice is remembered **for that level**.
 - The pink **1/N** button in the **Guidelines** group of the **Playback** tab does the same.
 - The red **crossed lines** button removes all guidelines.

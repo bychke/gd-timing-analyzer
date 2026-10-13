@@ -3,11 +3,12 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-project(WaveformTiming VERSION 1.2.0)
+project(WaveformTiming VERSION 1.3.0)
 
 add_library(${PROJECT_NAME} SHARED
     src/main.cpp
     src/Session.cpp
+    src/Triggers.cpp
     src/timing/TimingMap.cpp
     src/analysis/Analyzer.cpp
     src/audio/AudioData.cpp

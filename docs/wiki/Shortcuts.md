@@ -15,13 +15,15 @@ All of these work in the **timing window**, when no text field has focus.
 | **Ctrl+Z** | Undo |
 | **Ctrl+Y** or **Ctrl+Shift+Z** | Redo |
 
+The **Undo** / **Redo** arrows in the top left corner of the window do the same.
+
 ## Mouse
 
 | Action | Result |
 |---|---|
-| Click the waveform | Move the cursor (snaps to the grid, **Alt** = free) |
+| Click the waveform | Move the cursor (snaps to the waveform grid, **Alt** = free) |
 | Drag the waveform | Scroll |
-| Drag a marker | Move a timing point or a rhythm point (**Shift** on a timing point = snap to the nearest hit) |
+| Drag a marker | Move a timing point or a rhythm point (**Shift** on a timing point = snap to the nearest hit, **Alt** on a rhythm point = free) |
 | Drag the overview strip | Jump anywhere in the song |
 | Wheel | Next / previous grid line |
 | **Shift** + wheel | Scroll |

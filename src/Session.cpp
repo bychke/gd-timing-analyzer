@@ -1,4 +1,5 @@
 #include "Session.hpp"
+#include "Options.hpp"
 
 #include <Geode/Geode.hpp>
 #include <Geode/binding/DrawGridLayer.hpp>
@@ -40,15 +41,32 @@ GJGameLevel* Session::currentLevel() {
     return nullptr;
 }
 
+// file name for a local level: its name (letters and digits kept, the rest as hex so names never collide)
+static std::string nameKey(std::string const& name) {
+    std::string safe;
+    for (unsigned char c : name) safe += std::isalnum(c) ? std::string(1, (char)c) : fmt::format("_{:02x}", c);
+    return "name-" + safe;
+}
+
 std::string Session::levelKey() {
     auto lvl = currentLevel();
     if (!lvl) return "";
     int id = lvl->m_levelID.value();
     if (lvl->m_levelType != GJLevelType::Editor && id > 0) return fmt::format("online-{}", id);
-    if (lvl->m_M_ID > 0) return fmt::format("local-{}", lvl->m_M_ID);
-    std::string safe;
-    for (char c : std::string(lvl->m_levelName)) safe += std::isalnum((unsigned char)c) ? c : '_';
-    return "local-" + safe;
+    // GD has no lasting ID for a local level (m_M_ID changes between runs, which lost the timing),
+    // so it is known by its name. Renamed while the game runs -> its file is renamed too.
+    static GJGameLevel* s_lastLevel = nullptr;
+    static std::string s_lastName;
+    std::string name = lvl->m_levelName;
+    if (lvl == s_lastLevel && name != s_lastName && !s_lastName.empty()) {
+        auto dir = Mod::get()->getSaveDir() / "levels";
+        auto from = dir / (nameKey(s_lastName) + ".json"), to = dir / (nameKey(name) + ".json");
+        std::error_code ec;
+        if (std::filesystem::exists(from, ec) && !std::filesystem::exists(to, ec)) std::filesystem::rename(from, to, ec);
+    }
+    s_lastLevel = lvl;
+    s_lastName = name;
+    return nameKey(name);
 }
 
 std::string Session::levelName() {
@@ -66,10 +84,40 @@ matjson::Value& Session::levelData() {
         m_levelKey = key;
         m_levelData = matjson::Value::object();
         std::error_code ec;
-        if (!key.empty() && std::filesystem::exists(levelFile(key), ec)) {
-            std::ifstream in(levelFile(key), std::ios::binary);
+        auto read = [](std::filesystem::path const& file) -> std::optional<matjson::Value> {
+            std::ifstream in(file, std::ios::binary);
             std::stringstream ss; ss << in.rdbuf();
-            if (auto res = matjson::parse(ss.str()); res && res.unwrap().isObject()) m_levelData = res.unwrap();
+            if (auto res = matjson::parse(ss.str()); res && res.unwrap().isObject()) return res.unwrap();
+            return std::nullopt;
+        };
+        if (!key.empty() && std::filesystem::exists(levelFile(key), ec)) {
+            if (auto v = read(levelFile(key))) m_levelData = *v;
+        }
+        else if (key.starts_with("name-")) {
+            // older versions saved local levels as "local-<m_M_ID>.json", and that ID changed between runs,
+            // so one level can have several of them: take the newest one that has a timing
+            auto name = levelName();
+            std::optional<matjson::Value> best;
+            bool bestTiming = false;
+            std::filesystem::file_time_type bestTime{};
+            for (auto const& e : std::filesystem::directory_iterator(levelFile(key).parent_path(), ec)) {
+                auto file = utils::string::pathToString(e.path().filename());
+                if (!file.starts_with("local-") || e.path().extension() != ".json") continue;
+                auto v = read(e.path());
+                if (!v || (*v)["level"].asString().unwrapOr("") != name) continue;
+                bool timing = !(*v)["timing"].asString().unwrapOr("").empty();
+                auto time = e.last_write_time(ec);
+                if (!best || (timing && !bestTiming) || (timing == bestTiming && time > bestTime)) {
+                    best = v;
+                    bestTiming = timing;
+                    bestTime = time;
+                }
+            }
+            if (best) {
+                m_levelData = *best;
+                writeLevelData();
+                log::info("Level \"{}\": moved the saved timing to {}.json", name, key);
+            }
         }
     }
     return m_levelData;
@@ -81,7 +129,15 @@ void Session::writeLevelData() {
     std::error_code ec;
     std::filesystem::create_directories(p.parent_path(), ec);
     m_levelData["level"] = levelName();
-    std::ofstream(p, std::ios::binary) << m_levelData.dump();
+    auto tmp = p;
+    tmp += ".tmp";
+    {
+        std::ofstream out(tmp, std::ios::binary);
+        out << m_levelData.dump();
+        if (!out) return;
+    }
+    std::filesystem::rename(tmp, p, ec);
+    if (ec) std::ofstream(p, std::ios::binary) << m_levelData.dump();
 }
 
 matjson::Value Session::setting(char const* key, matjson::Value def) {
@@ -108,10 +164,10 @@ double Session::settingDouble(char const* key, double def) { return setting(key,
 bool Session::settingBool(char const* key, bool def) { return setting(key, def).asBool().unwrapOr(def); }
 
 void Session::save() {
-    if (audioPath.empty()) return;
     auto text = map.serialize();
     auto& data = levelData();
     if (m_levelKey.empty()) {
+        if (audioPath.empty()) return;
         // no level open -> per audio file
         auto p = savePathFor(audioPath);
         std::error_code ec;
@@ -121,8 +177,10 @@ void Session::save() {
     }
     // per level
     data["timing"] = text;
-    data["song"] = utils::string::pathToString(audioPath.filename());
-    data["audio"] = utils::string::pathToString(audioPath);
+    if (!audioPath.empty()) {
+        data["song"] = utils::string::pathToString(audioPath.filename());
+        data["audio"] = utils::string::pathToString(audioPath);
+    }
     writeLevelData();
     m_mapLevelKey = m_levelKey;
     autoGuidelines();
@@ -166,9 +224,7 @@ void Session::loadTimingFor(std::filesystem::path const& path) {
     auto& data = levelData();
     m_mapLevelKey = m_levelKey;
     if (!m_levelKey.empty()) {
-        if (data["timing"].isString() &&
-            data["song"].asString().unwrapOr("") == utils::string::pathToString(path.filename()))
-            map = TimingMap::deserialize(data["timing"].asString().unwrap());
+        if (data["timing"].isString()) map = TimingMap::deserialize(data["timing"].asString().unwrap());
         return;
     }
     // no level open -> timing saved for this audio file
@@ -203,6 +259,7 @@ void Session::enterLevel() {
     if (song.empty()) song = currentLevelSongPath();
     m_mapLevelKey = m_levelKey;
     if (!song.empty()) loadTimingFor(song);
+    else if (data["timing"].isString()) map = TimingMap::deserialize(data["timing"].asString().unwrap());
     sessionChanged();
 }
 
@@ -429,7 +486,7 @@ bool Session::clearGuidelines() {
 }
 
 void Session::autoGuidelines() {
-    if (!Mod::get()->getSettingValue<bool>("auto-guidelines")) return;
+    if (!opt::get<bool>("auto-guidelines")) return; // the AUTO button next to Guidelines
     if (!LevelEditorLayer::get() || !timingIsForCurrentLevel()) return;
     if (map.empty()) clearGuidelines();
     else applyGuidelines();
